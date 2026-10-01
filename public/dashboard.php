@@ -14,6 +14,18 @@ $isAdmin = $_SESSION['role'] === 'admin';
 $eventModel = new Event($pdo);
 $myEvents = $eventModel->getRegisteredByUser($_SESSION['user_id']);
 
+// ชั่วโมงสะสม (เฉพาะ student)
+$currentAcademicYear = (string)(date('Y') + 543);
+$totalHours = 0;
+$requiredHours = 0;
+if (!$isAdmin) {
+    $totalHours = $eventModel->getTotalHours($_SESSION['user_id'], $currentAcademicYear);
+    $stmt = $pdo->prepare("SELECT required_hours FROM hour_goals WHERE student_year = :year AND academic_year = :ay");
+    $stmt->execute(['year' => $_SESSION['student_year'], 'ay' => $currentAcademicYear]);
+    $goal = $stmt->fetch();
+    $requiredHours = $goal ? (float)$goal['required_hours'] : 0;
+}
+
 $notifModel = new Notification($pdo);
 $unreadCount = $isAdmin ? 0 : $notifModel->countUnread($_SESSION['user_id']);
 
@@ -49,6 +61,7 @@ $avatarSrc = !empty($_SESSION['profile_image'])
         <a href="calendar.php">📅 ปฏิทินกิจกรรม</a>
         <?php if ($isAdmin): ?>
             <a href="admin_dashboard.php">📊 แดชบอร์ด</a>
+            <a href="admin_hours.php">⏱️ ชั่วโมงกิจกรรม</a>
             <a href="admin_users.php">👥 จัดการผู้ใช้</a>
         <?php else: ?>
             <a href="checkin.php">✅ เช็คอินกิจกรรม</a>
@@ -68,11 +81,45 @@ $avatarSrc = !empty($_SESSION['profile_image'])
             <p>ชื่อ: <?= htmlspecialchars($_SESSION['fullname']) ?></p>
             <p>รหัสนักศึกษา: <?= htmlspecialchars($_SESSION['username']) ?></p>
             <p>สถานะ:
+            <?php if (!$isAdmin): ?>
+            <div class="card">
+            <h2>ชั่วโมงกิจกรรมสะสม ปีการศึกษา <?= $currentAcademicYear ?></h2>
+            <?php
+                $percent = $requiredHours > 0 ? min(100, round(($totalHours / $requiredHours) * 100)) : 100;
+                $barColor = $percent >= 100 ? '#1e5631' : ($percent >= 50 ? '#f39c12' : '#c0392b');
+            ?>
+            <div style="margin-bottom: 8px; font-size: 15px;">
+                <strong style="color: <?= $barColor ?>;"><?= $totalHours ?></strong>
+                <?php if ($requiredHours > 0): ?>
+                    / <?= $requiredHours ?> ชั่วโมง
+                <?php else: ?>
+                    ชั่วโมง (ยังไม่ได้กำหนดเป้าหมาย)
+                <?php endif; ?>
+            </div>
+            <?php if ($requiredHours > 0): ?>
+            <div style="background:#eee; border-radius:10px; height:14px; overflow:hidden;">
+                <div style="background:<?= $barColor ?>; width:<?= $percent ?>%; height:100%; border-radius:10px; transition: width 0.5s;"></div>
+            </div>
+                        <div style="font-size:12px; color:#666; margin-top:6px;">
+                <?php if ($percent >= 100): ?>
+                    ✅ ครบตามเกณฑ์แล้ว!
+                    <a href="generate_cert.php" class="btn"
+                    style="display:inline-block; margin-top:10px; font-size:13px;">
+                        📄 ดาวน์โหลดใบเกียรติบัตร
+                    </a>
+                <?php else: ?>
+                    ต้องการอีก <?= max(0, $requiredHours - $totalHours) ?> ชั่วโมง
+                <?php endif; ?>
+            </div>
+            <?php endif; ?>
+        </div>
+        <?php endif; ?>
                 <?php if ($isAdmin): ?>
                     เจ้าหน้าที่
                 <?php else: ?>
                     นักศึกษา<?= !empty($_SESSION['student_year']) ? ' ชั้นปีที่ ' . (int) $_SESSION['student_year'] : '' ?>
                 <?php endif; ?>
+
             </p>
         </div>
 

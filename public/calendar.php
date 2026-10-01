@@ -121,6 +121,7 @@ $avatarSrc = !empty($_SESSION['profile_image'])
         <a href="calendar.php" class="active">📅 ปฏิทินกิจกรรม</a>
         <?php if ($isAdmin): ?>
         <a href="admin_dashboard.php">📊 แดชบอร์ด</a>
+        <a href="admin_hours.php">⏱️ ชั่วโมงกิจกรรม</a>
         <a href="admin_users.php">👥 จัดการผู้ใช้</a>
         <?php else: ?>
         <a href="checkin.php">✅ เช็คอินกิจกรรม</a>
@@ -164,6 +165,7 @@ $avatarSrc = !empty($_SESSION['profile_image'])
         <p id="evTime"></p>
         <p id="evLocation"></p>
         <p id="evSeats"></p>
+        <p id="evHours"></p>
         <p id="evYears"></p>
         <p id="evDescription"></p>
 
@@ -174,49 +176,55 @@ $avatarSrc = !empty($_SESSION['profile_image'])
             <p id="evCheckinCode" style="font-weight:600;"></p>
             <div id="evQrCode" style="text-align:center; margin: 10px 0;"></div>
             <button class="btn-outline" id="printListBtn" style="width:100%; margin-bottom:8px;">🖨️ พิมพ์รายชื่อผู้เข้าร่วม</button>
+            <button class="btn-outline" id="editBtn" style="width:100%; margin-bottom:8px; border-color:#f39c12; color:#f39c12;">✏️ แก้ไขกิจกรรม</button>
             <button class="btn-danger" id="deleteBtn">ลบกิจกรรมนี้</button>
         <?php endif; ?>
     </div>
 </div>
 
 <?php if ($isAdmin): ?>
-<!-- Modal เพิ่มกิจกรรม (admin เท่านั้น) -->
-<div class="modal-overlay2" id="createModal">
+<!-- Modal แก้ไขกิจกรรม -->
+<div class="modal-overlay2" id="editModal">
     <div class="modal-box2">
-        <button class="close-btn" onclick="closeModal('createModal')">&times;</button>
-        <h2>เพิ่มกิจกรรมใหม่</h2>
+        <button class="close-btn" onclick="closeModal('editModal')">&times;</button>
+        <h2>แก้ไขกิจกรรม</h2>
+
+        <input type="hidden" id="editEventId">
 
         <label>ชื่อกิจกรรม</label>
-        <input type="text" id="newTitle">
+        <input type="text" id="editTitle">
 
         <label>รายละเอียด</label>
-        <textarea id="newDescription" rows="3"></textarea>
+        <textarea id="editDescription" rows="3"></textarea>
 
         <label>สถานที่</label>
-        <input type="text" id="newLocation">
+        <input type="text" id="editLocation">
 
         <label>จำนวนที่นั่ง (เว้นว่าง = ไม่จำกัด)</label>
-        <input type="number" id="newMaxParticipants" min="1" placeholder="เช่น 50">
+        <input type="number" id="editMaxParticipants" min="1" placeholder="เช่น 50">
 
-        <label>รหัสเช็คอิน (เว้นว่าง = สุ่มให้อัตโนมัติ)</label>
-        <input type="text" id="newCheckinCode" maxlength="10" placeholder="เช่น EVENT01">
+        <label>ชั่วโมงกิจกรรม</label>
+        <input type="number" id="editActivityHours" min="0" max="24" step="0.5" placeholder="เช่น 3">
 
-        <label>เปิดให้ชั้นปี (ไม่เลือกเลย = เปิดทุกชั้นปี)</label>
+        <label>รหัสเช็คอิน</label>
+        <input type="text" id="editCheckinCode" maxlength="10">
+
+        <label>เปิดให้ชั้นปี (ไม่เลือก = ทุกชั้นปี)</label>
         <div class="year-check-row">
-            <label><input type="checkbox" value="1" class="year-checkbox"> ปี 1</label>
-            <label><input type="checkbox" value="2" class="year-checkbox"> ปี 2</label>
-            <label><input type="checkbox" value="3" class="year-checkbox"> ปี 3</label>
-            <label><input type="checkbox" value="4" class="year-checkbox"> ปี 4</label>
+            <label><input type="checkbox" value="1" class="edit-year-checkbox"> ปี 1</label>
+            <label><input type="checkbox" value="2" class="edit-year-checkbox"> ปี 2</label>
+            <label><input type="checkbox" value="3" class="edit-year-checkbox"> ปี 3</label>
+            <label><input type="checkbox" value="4" class="edit-year-checkbox"> ปี 4</label>
         </div>
 
         <label>วันเวลาเริ่ม</label>
-        <input type="datetime-local" id="newStart">
+        <input type="datetime-local" id="editStart">
 
         <label>วันเวลาสิ้นสุด</label>
-        <input type="datetime-local" id="newEnd">
+        <input type="datetime-local" id="editEnd">
 
-        <button class="btn" style="width:100%;" onclick="submitCreateEvent()">บันทึกกิจกรรม</button>
-        <div class="status-msg" id="createStatusMsg"></div>
+        <button class="btn" style="width:100%;" onclick="submitEditEvent()">บันทึกการแก้ไข</button>
+        <div class="status-msg" id="editStatusMsg"></div>
     </div>
 </div>
 <?php endif; ?>
@@ -272,6 +280,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 isFull = regCount >= maxP;
             }
             document.getElementById('evSeats').textContent = seatText;
+            const hours = info.event.extendedProps.activityHours;
+            document.getElementById('evHours').textContent = hours > 0 ? `ชั่วโมงกิจกรรม: ${hours} ชม.` : '';
 
             const targetYears = info.event.extendedProps.targetYears;
             let yearText = 'เปิดให้ทุกชั้นปี';
@@ -309,6 +319,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
                 document.getElementById('printListBtn').onclick = function () {
                     window.open('print_attendees.php?event_id=' + currentEventId, '_blank');
+                };
+                document.getElementById('editBtn').onclick = function () {
+                    openEditModal(currentEventId);
                 };
                 document.getElementById('deleteBtn').onclick = function () {
                     deleteEvent(currentEventId);
@@ -418,34 +431,54 @@ function openCreateModal() {
     document.getElementById('createModal').classList.add('active');
 }
 
-async function deleteEvent(eventId) {
-    if (!confirm('ยืนยันการลบกิจกรรมนี้?')) return;
 
+async function openEditModal(eventId) {
+    closeModal('eventModal');
+
+    // ดึงข้อมูล event เดิมมาเติมฟอร์ม
     const res = await fetch('api/manage_event.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'delete', event_id: eventId })
+        body: JSON.stringify({ action: 'get', event_id: eventId })
     });
     const result = await res.json();
+    if (!result.success) { alert('โหลดข้อมูลไม่สำเร็จ'); return; }
 
-    if (result.success) {
-        closeModal('eventModal');
-        calendar.refetchEvents();
-    } else {
-        alert('ลบไม่สำเร็จ กรุณาลองใหม่');
-    }
+    const ev = result.event;
+    document.getElementById('editEventId').value     = ev.id;
+    document.getElementById('editTitle').value       = ev.title;
+    document.getElementById('editDescription').value = ev.description || '';
+    document.getElementById('editLocation').value    = ev.location || '';
+    document.getElementById('editMaxParticipants').value = ev.max_participants || '';
+    document.getElementById('editActivityHours').value   = ev.activity_hours || '';
+    document.getElementById('editCheckinCode').value     = ev.checkin_code || '';
+
+    // datetime-local ต้องการรูปแบบ "YYYY-MM-DDTHH:MM"
+    document.getElementById('editStart').value = ev.start_datetime.replace(' ', 'T').slice(0, 16);
+    document.getElementById('editEnd').value   = ev.end_datetime.replace(' ', 'T').slice(0, 16);
+
+    // เช็ค checkbox ชั้นปี
+    const years = ev.target_years ? ev.target_years.split(',') : [];
+    document.querySelectorAll('.edit-year-checkbox').forEach(cb => {
+        cb.checked = years.includes(cb.value);
+    });
+
+    document.getElementById('editStatusMsg').textContent = '';
+    document.getElementById('editModal').classList.add('active');
 }
 
-async function submitCreateEvent() {
-    const title = document.getElementById('newTitle').value.trim();
-    const description = document.getElementById('newDescription').value.trim();
-    const location = document.getElementById('newLocation').value.trim();
-    const maxParticipants = document.getElementById('newMaxParticipants').value.trim();
-    const checkinCode = document.getElementById('newCheckinCode').value.trim();
-    const targetYears = Array.from(document.querySelectorAll('.year-checkbox:checked')).map(cb => cb.value);
-    const start = document.getElementById('newStart').value;
-    const end = document.getElementById('newEnd').value;
-    const msgEl = document.getElementById('createStatusMsg');
+async function submitEditEvent() {
+    const eventId      = document.getElementById('editEventId').value;
+    const title        = document.getElementById('editTitle').value.trim();
+    const description  = document.getElementById('editDescription').value.trim();
+    const location     = document.getElementById('editLocation').value.trim();
+    const maxP         = document.getElementById('editMaxParticipants').value.trim();
+    const hours        = document.getElementById('editActivityHours').value.trim();
+    const checkinCode  = document.getElementById('editCheckinCode').value.trim();
+    const targetYears  = Array.from(document.querySelectorAll('.edit-year-checkbox:checked')).map(cb => cb.value);
+    const start        = document.getElementById('editStart').value;
+    const end          = document.getElementById('editEnd').value;
+    const msgEl        = document.getElementById('editStatusMsg');
 
     if (!title || !start || !end) {
         msgEl.textContent = 'กรุณากรอกชื่อกิจกรรมและวันเวลาให้ครบ';
@@ -458,38 +491,30 @@ async function submitCreateEvent() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            action: 'create',
-            title: title,
-            description: description,
-            location: location,
-            max_participants: maxParticipants,
-            checkin_code: checkinCode,
-            target_years: targetYears,
-            start_datetime: start.replace('T', ' ') + ':00',
-            end_datetime: end.replace('T', ' ') + ':00'
+            action:          'edit',
+            event_id:        eventId,
+            title:           title,
+            description:     description,
+            location:        location,
+            max_participants: maxP,
+            activity_hours:  hours,
+            checkin_code:    checkinCode,
+            target_years:    targetYears,
+            start_datetime:  start.replace('T', ' ') + ':00',
+            end_datetime:    end.replace('T', ' ') + ':00',
         })
     });
     const result = await res.json();
 
     if (result.success) {
-        msgEl.textContent = 'เพิ่มกิจกรรมสำเร็จ!';
+        msgEl.textContent = 'บันทึกสำเร็จ!';
         calendar.refetchEvents();
-        setTimeout(() => {
-            closeModal('createModal');
-            document.getElementById('newTitle').value = '';
-            document.getElementById('newDescription').value = '';
-            document.getElementById('newLocation').value = '';
-            document.getElementById('newMaxParticipants').value = '';
-            document.getElementById('newCheckinCode').value = '';
-            document.querySelectorAll('.year-checkbox').forEach(cb => cb.checked = false);
-            document.getElementById('newStart').value = '';
-            document.getElementById('newEnd').value = '';
-            msgEl.textContent = '';
-        }, 800);
+        setTimeout(() => closeModal('editModal'), 800);
     } else {
         msgEl.textContent = 'บันทึกไม่สำเร็จ กรุณาลองใหม่';
     }
 }
+
 <?php endif; ?>
 </script>
 

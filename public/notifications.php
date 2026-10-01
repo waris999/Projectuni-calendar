@@ -49,6 +49,7 @@ $avatarSrc = !empty($_SESSION['profile_image'])
         <a href="calendar.php">📅 ปฏิทินกิจกรรม</a>
         <?php if ($isAdmin): ?>
             <a href="admin_dashboard.php">📊 แดชบอร์ด</a>
+            <a href="admin_hours.php">⏱️ ชั่วโมงกิจกรรม</a>
             <a href="admin_users.php">👥 จัดการผู้ใช้</a>
         <?php else: ?>
             <a href="checkin.php">✅ เช็คอินกิจกรรม</a>

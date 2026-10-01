@@ -149,4 +149,29 @@ class User
         )->fetchAll();
         return $stats;
     }
+        public function saveCertificatePath(int $userId, string $path): bool
+    {
+        $stmt = $this->pdo->prepare(
+            "UPDATE users SET certificate_path = :path WHERE id = :id"
+        );
+        return $stmt->execute(['path' => $path, 'id' => $userId]);
+    }
+        public function changePassword(int $userId, string $oldPassword, string $newPassword): string
+    {
+        $stmt = $this->pdo->prepare("SELECT password FROM users WHERE id = :id");
+        $stmt->execute(['id' => $userId]);
+        $user = $stmt->fetch();
+
+        if (!$user) {
+            return 'user_not_found';
+        }
+        if (!password_verify($oldPassword, $user['password'])) {
+            return 'wrong_password';
+        }
+
+        $hashed = password_hash($newPassword, PASSWORD_DEFAULT);
+        $update = $this->pdo->prepare("UPDATE users SET password = :pwd WHERE id = :id");
+        $update->execute(['pwd' => $hashed, 'id' => $userId]);
+        return 'success';
+    }
 }

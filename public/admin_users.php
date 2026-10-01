@@ -47,6 +47,7 @@ $avatarSrc = !empty($_SESSION['profile_image'])
         <a href="dashboard.php">🏠 หน้าหลัก</a>
         <a href="calendar.php">📅 ปฏิทินกิจกรรม</a>
         <a href="admin_dashboard.php">📊 แดชบอร์ด</a>
+        <a href="admin_hours.php">⏱️ ชั่วโมงกิจกรรม</a>
         <a href="admin_users.php" class="active">👥 จัดการผู้ใช้</a>
         <a href="notifications.php">🔔 แจ้งเตือน</a>
         <a href="logout.php">🚪 ออกจากระบบ</a>

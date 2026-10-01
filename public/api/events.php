@@ -30,6 +30,7 @@ $formatted = array_map(function ($e) use ($isAdmin) {
         'registeredCount'  => (int) $e['registered_count'],
         'targetYears'      => $e['target_years'],
         'checkinCode'      => $isAdmin ? $e['checkin_code'] : null,
+        'activityHours'    => (float) $e['activity_hours'],
         ],
     ];
 }, $events);
