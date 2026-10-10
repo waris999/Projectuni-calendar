@@ -140,7 +140,7 @@ $avatarSrc = !empty($_SESSION['profile_image'])
                 <strong><?= $totalHoursForCert ?> ชั่วโมง</strong>
                 แล้ว สามารถดาวน์โหลดใบเกียรติบัตรได้เลย
             </span>
-            <a href="generate_cert.php" class="btn" style="font-size:13px; white-space:nowrap;">
+            <a href="my_cert.php" class="btn" style="font-size:13px; white-space:nowrap;">
                 📄 ดาวน์โหลดใบเกียรติบัตร
             </a>
         </div>
@@ -195,8 +195,10 @@ $avatarSrc = !empty($_SESSION['profile_image'])
             <?php if (empty($history)): ?>
                 <p style="color:#999; font-size:14px;">ยังไม่มีประวัติกิจกรรม</p>
             <?php else: ?>
-                <?php foreach ($history as $ev):
-                    $isPast = strtotime($ev['end_datetime']) < time();
+                <?php
+                $historyNow = $pdo->query("SELECT NOW() AS now")->fetch()['now'];
+                foreach ($history as $ev):
+                    $isPast = $ev['end_datetime'] < $historyNow;
 
                     if ($ev['reg_status'] === 'attended') {
                         $badgeClass = 'badge-attended';
@@ -237,6 +239,15 @@ $avatarSrc = !empty($_SESSION['profile_image'])
                                 class="btn"
                                 style="font-size:12px; padding:4px 12px;">
                                     📸<?= $photoCount > 0 ? " ({$photoCount})" : '' ?>
+                                </a>
+                            <?php endif; ?>
+
+                            <!-- ปุ่มใบเกียรติบัตรต่อกิจกรรม -->
+                            <?php if ($ev['reg_status'] === 'attended'): ?>
+                                <a href="my_cert.php?event_id=<?= (int)$ev['id'] ?>"
+                                class="btn"
+                                style="font-size:12px; padding:4px 12px; background:#1a4a2e; color:#fff;">
+                                    📄 ใบเกียรติบัตร
                                 </a>
                             <?php endif; ?>
                         </div>

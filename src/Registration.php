@@ -27,13 +27,22 @@ class Registration
     public function register(int $userId, int $eventId): bool|string
     {
         // ดึงข้อมูล event + ข้อมูล user มาเช็คสิทธิ์ก่อน
-        $eventStmt = $this->pdo->prepare("SELECT max_participants, target_years FROM events WHERE id = :id");
+        $eventStmt = $this->pdo->prepare("SELECT max_participants, target_years, start_datetime FROM events WHERE id = :id");
         $eventStmt->execute(['id' => $eventId]);
         $event = $eventStmt->fetch();
 
         $userStmt = $this->pdo->prepare("SELECT student_year FROM users WHERE id = :id");
         $userStmt->execute(['id' => $userId]);
         $user = $userStmt->fetch();
+
+        // เช็คว่ากิจกรรมเริ่มแล้วหรือยัง (ถ้าเริ่มแล้วปิดลงทะเบียน)
+        if ($event) {
+            $nowStmt = $this->pdo->query("SELECT NOW() AS now");
+            $nowRow = $nowStmt->fetch();
+            if ($event['start_datetime'] <= $nowRow['now']) {
+                return 'event_started';
+            }
+        }
 
         // เช็คว่าชั้นปีตรงกับที่กิจกรรมกำหนดไหม (ถ้า target_years เป็น NULL แปลว่าเปิดทุกปี)
         if ($event && $event['target_years'] !== null) {
@@ -108,7 +117,10 @@ class Registration
         if (!$event) {
             return 'event_not_found';
         }
-        if (strtotime($event['start_datetime']) > time()) {
+        // เปรียบเทียบกับ NOW() ของ MySQL เพื่อหลีกเลี่ยงปัญหา timezone ของ PHP
+        $nowStmt = $this->pdo->query("SELECT NOW() AS now");
+        $nowRow = $nowStmt->fetch();
+        if ($event['start_datetime'] > $nowRow['now']) {
             return 'not_started';
         }
         if (empty($event['checkin_code']) || strcasecmp(trim($code), $event['checkin_code']) !== 0) {

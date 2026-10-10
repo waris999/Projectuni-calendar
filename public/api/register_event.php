@@ -36,6 +36,10 @@ if ($action === 'register') {
         echo json_encode(['success' => false, 'error' => 'year_not_allowed']);
         exit;
     }
+    if ($result === 'event_started') {
+        echo json_encode(['success' => false, 'error' => 'event_started']);
+        exit;
+    }
     $ok = $result;
 } else {
     $ok = $regModel->cancel($userId, $eventId);

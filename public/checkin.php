@@ -30,13 +30,16 @@ $uploadError   = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['evidence_photo'])) {
     $uploadEventId = (int)($_POST['upload_event_id'] ?? 0);
 
-    // เช็คว่ากิจกรรมยังไม่ผ่านไปแล้ว
+    // เช็คว่ากิจกรรมผ่านไปเกิน 2 วันแล้วหรือยัง
     $evStmt = $pdo->prepare("SELECT end_datetime FROM events WHERE id = :id");
     $evStmt->execute(['id' => $uploadEventId]);
     $evRow = $evStmt->fetch();
 
-    if (!$evRow || strtotime($evRow['end_datetime']) < time()) {
-        $uploadError = 'ไม่สามารถอัปโหลดรูปสำหรับกิจกรรมที่ผ่านไปแล้วได้';
+    $nowCheck = $pdo->query("SELECT NOW() AS now")->fetch()['now'];
+    // อนุญาตให้อัปโหลดได้ภายใน 2 วันหลังกิจกรรมสิ้นสุด
+    $uploadDeadline = date('Y-m-d H:i:s', strtotime($evRow['end_datetime'] ?? 'now') + 2 * 86400);
+    if (!$evRow || $nowCheck > $uploadDeadline) {
+        $uploadError = 'ไม่สามารถอัปโหลดรูปได้ เนื่องจากกิจกรรมสิ้นสุดเกิน 2 วันแล้ว';
     } else {
         // เช็คว่า user เช็คอินกิจกรรมนี้แล้วจริง
         $regStmt = $pdo->prepare(
@@ -264,10 +267,18 @@ $avatarSrc = !empty($_SESSION['profile_image'])
             <?php if (empty($myEvents)): ?>
                 <p style="color:#999; font-size:14px;">คุณยังไม่ได้ลงทะเบียนกิจกรรมใดๆ</p>
             <?php else: ?>
-                <?php foreach ($myEvents as $ev):
+                <?php
+                $mysqlNow = $pdo->query("SELECT NOW() AS now")->fetch()['now'];
+                foreach ($myEvents as $ev):
                     $isAttended = $ev['status'] === 'attended';
-                    $hasStarted = strtotime($ev['start_datetime']) <= time();
-                    $isPast     = strtotime($ev['end_datetime']) < time();
+                    $hasStarted    = $ev['start_datetime'] <= $mysqlNow;
+                    $isPast        = $ev['end_datetime'] < $mysqlNow;
+                    // ล็อคไม่ให้กรอก code เกิน 2 วันหลัง start_datetime
+                    $checkinDeadline = date('Y-m-d H:i:s', strtotime($ev['start_datetime']) + 2 * 86400);
+                    $isCheckinLocked = $mysqlNow > $checkinDeadline;
+                    // อนุญาตอัปโหลดรูปภายใน 2 วันหลัง end_datetime
+                    $uploadDeadlineEv = date('Y-m-d H:i:s', strtotime($ev['end_datetime']) + 2 * 86400);
+                    $canUpload = $mysqlNow <= $uploadDeadlineEv;
 
                     // ดึงรูปที่อัปโหลดไว้แล้ว (เฉพาะกิจกรรมที่เช็คอินแล้ว)
                     $existingPhotos = $isAttended
@@ -288,6 +299,8 @@ $avatarSrc = !empty($_SESSION['profile_image'])
                                 <span class="badge badge-attended">เช็คอินแล้ว ✓</span>
                             <?php elseif (!$hasStarted): ?>
                                 <span class="badge badge-pending">ยังไม่ถึงเวลากิจกรรม</span>
+                            <?php elseif ($isCheckinLocked): ?>
+                                <span class="badge badge-missed">หมดเวลาเช็คอิน</span>
                             <?php else: ?>
                                 <!-- ฟอร์มเช็คอิน -->
                                 <div>
@@ -310,8 +323,8 @@ $avatarSrc = !empty($_SESSION['profile_image'])
                             <div class="evidence-section">
                                 <h4>📸 รูปหลักฐานการเข้าร่วม</h4>
 
-                                <?php if (!$isPast): ?>
-                                    <!-- กิจกรรมยังไม่ผ่าน → อัปโหลดได้ -->
+                                <?php if ($canUpload): ?>
+                                    <!-- อัปโหลดได้ภายใน 2 วันหลังกิจกรรมสิ้นสุด -->
                                     <form method="POST" enctype="multipart/form-data">
                                         <input type="hidden" name="upload_event_id" value="<?= (int)$ev['id'] ?>">
                                         <div class="evidence-upload">
@@ -332,7 +345,7 @@ $avatarSrc = !empty($_SESSION['profile_image'])
                                             style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;"></div>
                                     </form>
                                 <?php else: ?>
-                                    <p class="past-notice">กิจกรรมสิ้นสุดแล้ว ไม่สามารถเพิ่มรูปได้</p>
+                                    <p class="past-notice">หมดเวลาเพิ่มรูปแล้ว (เกิน 2 วันหลังกิจกรรมสิ้นสุด)</p>
                                 <?php endif; ?>
 
                                 <!-- รูปที่อัปโหลดไว้แล้ว -->
