@@ -25,78 +25,254 @@ $avatarSrc = !empty($_SESSION['profile_image'])
 <script src="https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/6.1.10/index.global.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
+    /* ── Calendar wrapper ─────────────────────────────── */
     #calendar {
         background: #fff;
-        border-radius: 10px;
-        padding: 20px;
-        box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.06);
     }
-    .fc-event { cursor: pointer; }
-    .calendar-header-actions {
+    .fc-event { cursor: pointer; border-radius: 6px !important; font-size: 12px !important; }
+    .fc-daygrid-event { padding: 2px 6px !important; }
+    .fc-toolbar-title { font-size: 18px !important; font-weight: 600 !important; }
+    .fc-button-primary {
+        background: #1a4a2e !important;
+        border-color: #1a4a2e !important;
+        border-radius: 6px !important;
+        font-size: 13px !important;
+    }
+    .fc-button-primary:hover { background: #2d7a4f !important; border-color: #2d7a4f !important; }
+    .fc-today-button { opacity: 0.85 !important; }
+    .fc-day-today { background: rgba(26,74,46,0.04) !important; }
+
+    /* ── Filters bar ──────────────────────────────────── */
+    .calendar-filters {
         display: flex;
-        justify-content: flex-end;
-        margin-bottom: 12px;
+        gap: 10px;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
     }
+    .calendar-filters input {
+        flex: 1;
+        min-width: 200px;
+        padding: 9px 14px 9px 38px;
+        border: 1.5px solid #d4e3d9;
+        border-radius: 8px;
+        font-size: 14px;
+        background: #f7f9f5 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7f72' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E") no-repeat 12px center;
+        outline: none;
+        transition: border-color .15s;
+    }
+    .calendar-filters input:focus { border-color: #2d7a4f; background-color: #fff; }
+    .calendar-filters select {
+        padding: 9px 32px 9px 12px;
+        border: 1.5px solid #d4e3d9;
+        border-radius: 8px;
+        font-size: 14px;
+        background: #f7f9f5;
+        outline: none;
+        cursor: pointer;
+        appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7f72' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 10px center;
+        transition: border-color .15s;
+    }
+    .calendar-filters select:focus { border-color: #2d7a4f; }
+
+    /* ── Modal overlay ────────────────────────────────── */
     .modal-overlay2 {
         display: none;
         position: fixed;
         inset: 0;
-        background: rgba(0,0,0,0.5);
+        background: rgba(15,25,18,0.55);
+        backdrop-filter: blur(3px);
         align-items: center;
         justify-content: center;
         z-index: 999;
+        padding: 16px;
     }
     .modal-overlay2.active { display: flex; }
+
+    /* ── Modal box ────────────────────────────────────── */
     .modal-box2 {
         background: #fff;
-        border-radius: 10px;
-        padding: 26px;
-        width: 360px;
+        border-radius: 16px;
+        width: 420px;
+        max-width: 100%;
         position: relative;
-        max-height: 85vh;
+        max-height: 90vh;
         overflow-y: auto;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.18);
+        animation: modalIn .18s ease;
     }
-    .modal-box2 h2 { color: #1e5631; margin-bottom: 12px; font-size: 17px; }
-    .modal-box2 p { font-size: 14px; margin-bottom: 8px; color: #444; }
+    @keyframes modalIn {
+        from { opacity:0; transform: translateY(10px) scale(.98); }
+        to   { opacity:1; transform: translateY(0) scale(1); }
+    }
+    .modal-header {
+        padding: 22px 24px 16px;
+        border-bottom: 1px solid #eef2ef;
+        position: sticky; top: 0;
+        background: #fff;
+        border-radius: 16px 16px 0 0;
+        z-index: 1;
+    }
+    .modal-header h2 {
+        color: #1a4a2e;
+        font-size: 18px;
+        font-weight: 700;
+        margin: 0;
+        padding-right: 28px;
+        line-height: 1.3;
+    }
+    .modal-body { padding: 18px 24px 24px; }
     .modal-box2 .close-btn {
-        position: absolute; top: 12px; right: 16px;
-        background: none; border: none; font-size: 18px; cursor: pointer; color: #888;
+        position: absolute; top: 16px; right: 18px;
+        background: #f0f4f0; border: none;
+        width: 28px; height: 28px; border-radius: 50%;
+        font-size: 16px; cursor: pointer; color: #6b7f72;
+        display: flex; align-items: center; justify-content: center;
+        transition: background .15s;
     }
-    .modal-box2 input, .modal-box2 textarea {
-        width: 100%; padding: 9px; margin-bottom: 12px;
-        border: 1px solid #ccc; border-radius: 6px; font-size: 13px;
+    .modal-box2 .close-btn:hover { background: #e0ebe2; color: #1a4a2e; }
+
+    /* Event detail rows */
+    .ev-meta {
+        display: flex; flex-direction: column; gap: 8px;
+        margin-bottom: 18px;
+    }
+    .ev-meta-row {
+        display: flex; align-items: flex-start; gap: 10px;
+        font-size: 14px; color: #4a5e50;
+    }
+    .ev-meta-row .icon {
+        width: 20px; text-align: center;
+        flex-shrink: 0; margin-top: 1px;
+    }
+    .ev-meta-row strong { color: #1a4a2e; }
+    .ev-desc {
+        font-size: 14px; color: #6b7f72;
+        background: #f7f9f5; border-radius: 8px;
+        padding: 12px 14px; margin-bottom: 18px;
+        line-height: 1.6;
+    }
+    .ev-badge {
+        display: inline-flex; align-items: center; gap: 5px;
+        padding: 4px 10px; border-radius: 20px;
+        font-size: 12px; font-weight: 600;
+    }
+    .ev-badge-green  { background: #e6f4ea; color: #1e5631; }
+    .ev-badge-orange { background: #fff8e1; color: #b7791f; }
+    .ev-badge-red    { background: #fdecea; color: #b71c1c; }
+    .ev-badge-grey   { background: #f4f4f4; color: #888; }
+
+    /* QR section */
+    .qr-wrap {
+        background: #f7f9f5; border-radius: 10px;
+        padding: 16px; text-align: center;
+        margin-bottom: 16px;
+    }
+    .qr-wrap .qr-label {
+        font-size: 11px; color: #6b7f72;
+        margin-top: 8px; letter-spacing: .04em;
+    }
+    .checkin-code-badge {
+        display: inline-block;
+        background: #1a4a2e; color: #fff;
+        font-size: 20px; font-weight: 700;
+        letter-spacing: .12em;
+        padding: 8px 20px; border-radius: 8px;
+        margin-bottom: 12px;
+    }
+
+    /* Form fields */
+    .field-group { margin-bottom: 14px; }
+    .field-group label {
+        display: block; font-size: 12px;
+        font-weight: 600; color: #4a5e50;
+        margin-bottom: 5px; letter-spacing: .02em;
+    }
+    .modal-box2 input:not([type=checkbox]),
+    .modal-box2 textarea,
+    .modal-box2 select {
+        width: 100%; padding: 9px 12px;
+        border: 1.5px solid #d4e3d9; border-radius: 8px;
+        font-size: 14px; font-family: inherit;
+        background: #f7f9f5; color: #1c2b22;
+        outline: none; transition: border-color .15s, box-shadow .15s;
         box-sizing: border-box;
     }
-    .modal-box2 label { font-size: 13px; color: #444; display:block; margin-bottom:4px; }
-    .btn-danger {
-        background: #c0392b; color: #fff; border: none; padding: 9px;
-        border-radius: 6px; width: 100%; cursor: pointer; font-size: 14px; margin-top: 8px;
+    .modal-box2 input:focus:not([type=checkbox]),
+    .modal-box2 textarea:focus {
+        border-color: #2d7a4f;
+        box-shadow: 0 0 0 3px rgba(45,122,79,.1);
+        background: #fff;
     }
-    .btn-outline {
-        background: #fff; color: #1e5631; border: 1px solid #1e5631;
-        padding: 9px; border-radius: 6px; width: 100%; cursor: pointer; font-size: 14px;
-    }
-    .btn-outline:disabled {
-        cursor: not-allowed;
-        opacity: 0.7;
-    }
-    .status-msg { font-size: 12px; margin-top: 8px; text-align:center; }
+    .modal-box2 textarea { resize: vertical; min-height: 80px; }
+    .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    /* Year checkboxes */
     .year-check-row {
-        display: flex;
-        gap: 14px;
-        margin-bottom: 14px;
-        font-size: 13px;
-        flex-wrap: wrap;
+        display: flex; gap: 8px; flex-wrap: wrap;
+        margin-top: 2px;
     }
-    .year-check-row label {
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        margin-bottom: 0;
+    .year-chip {
+        display: flex; align-items: center; gap: 5px;
+        padding: 5px 12px; border-radius: 20px;
+        border: 1.5px solid #d4e3d9;
+        font-size: 13px; cursor: pointer;
+        transition: background .15s, border-color .15s;
+        user-select: none;
     }
-    .year-check-row input[type="checkbox"] {
-        width: auto;
-        margin: 0;
+    .year-chip:has(input:checked) {
+        background: #e6f4ea; border-color: #2d7a4f; color: #1a4a2e; font-weight: 600;
+    }
+    .year-chip input { display: none; }
+
+    /* Action buttons */
+    .modal-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+    .btn-primary-modal {
+        background: #1a4a2e; color: #fff; border: none;
+        padding: 11px; border-radius: 8px; width: 100%;
+        cursor: pointer; font-size: 14px; font-weight: 600;
+        font-family: inherit; transition: background .15s;
+    }
+    .btn-primary-modal:hover { background: #2d7a4f; }
+    .btn-primary-modal:disabled { opacity: .6; cursor: not-allowed; }
+    .btn-outline {
+        background: #fff; color: #1a4a2e;
+        border: 1.5px solid #1a4a2e;
+        padding: 10px; border-radius: 8px; width: 100%;
+        cursor: pointer; font-size: 14px;
+        font-family: inherit; transition: background .15s;
+    }
+    .btn-outline:hover { background: #f0f7f2; }
+    .btn-outline:disabled { opacity: .6; cursor: not-allowed; }
+    .btn-warning {
+        background: #fff; color: #b7791f;
+        border: 1.5px solid #f6ad55;
+        padding: 10px; border-radius: 8px; width: 100%;
+        cursor: pointer; font-size: 14px;
+        font-family: inherit; transition: background .15s;
+    }
+    .btn-warning:hover { background: #fffaf0; }
+    .btn-danger {
+        background: #fff; color: #b71c1c;
+        border: 1.5px solid #f08080;
+        padding: 10px; border-radius: 8px; width: 100%;
+        cursor: pointer; font-size: 14px;
+        font-family: inherit; transition: background .15s;
+    }
+    .btn-danger:hover { background: #fff5f5; }
+    .status-msg {
+        font-size: 12px; margin-top: 6px;
+        text-align: center; color: #6b7f72;
+    }
+    .calendar-header-actions {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 12px;
     }
 </style>
 </head>
@@ -160,25 +336,35 @@ $avatarSrc = !empty($_SESSION['profile_image'])
 <!-- Modal รายละเอียดกิจกรรม -->
 <div class="modal-overlay2" id="eventModal">
     <div class="modal-box2">
-        <button class="close-btn" onclick="closeModal('eventModal')">&times;</button>
-        <h2 id="evTitle"></h2>
-        <p id="evTime"></p>
-        <p id="evLocation"></p>
-        <p id="evSeats"></p>
-        <p id="evHours"></p>
-        <p id="evYears"></p>
-        <p id="evDescription"></p>
+        <div class="modal-header">
+            <button class="close-btn" onclick="closeModal('eventModal')">&times;</button>
+            <h2 id="evTitle"></h2>
+            <div id="evBadges" style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;"></div>
+        </div>
+        <div class="modal-body">
+            <div class="ev-meta" id="evMeta"></div>
+            <div class="ev-desc" id="evDescription" style="display:none;"></div>
 
-        <?php if (!$isAdmin): ?>
-            <button class="btn-outline" id="registerBtn" style="width:100%;"></button>
-            <div class="status-msg" id="regStatusMsg"></div>
-        <?php else: ?>
-            <p id="evCheckinCode" style="font-weight:600;"></p>
-            <div id="evQrCode" style="text-align:center; margin: 10px 0;"></div>
-            <button class="btn-outline" id="printListBtn" style="width:100%; margin-bottom:8px;">🖨️ พิมพ์รายชื่อผู้เข้าร่วม</button>
-            <button class="btn-outline" id="editBtn" style="width:100%; margin-bottom:8px; border-color:#f39c12; color:#f39c12;">✏️ แก้ไขกิจกรรม</button>
-            <button class="btn-danger" id="deleteBtn">ลบกิจกรรมนี้</button>
-        <?php endif; ?>
+            <?php if (!$isAdmin): ?>
+                <div class="modal-actions">
+                    <button class="btn-primary-modal" id="registerBtn"></button>
+                    <div class="status-msg" id="regStatusMsg"></div>
+                </div>
+            <?php else: ?>
+                <div id="evQrSection" style="display:none;">
+                    <div class="qr-wrap">
+                        <div id="evCheckinCodeBadge"></div>
+                        <div id="evQrCode"></div>
+                        <div class="qr-label">QR สำหรับเช็คอิน</div>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn-outline" id="printListBtn">🖨️ พิมพ์รายชื่อผู้เข้าร่วม</button>
+                    <button class="btn-warning" id="editBtn">✏️ แก้ไขกิจกรรม</button>
+                    <button class="btn-danger" id="deleteBtn">ลบกิจกรรมนี้</button>
+                </div>
+            <?php endif; ?>
+        </div>
     </div>
 </div>
 
@@ -186,45 +372,123 @@ $avatarSrc = !empty($_SESSION['profile_image'])
 <!-- Modal แก้ไขกิจกรรม -->
 <div class="modal-overlay2" id="editModal">
     <div class="modal-box2">
-        <button class="close-btn" onclick="closeModal('editModal')">&times;</button>
-        <h2>แก้ไขกิจกรรม</h2>
-
-        <input type="hidden" id="editEventId">
-
-        <label>ชื่อกิจกรรม</label>
-        <input type="text" id="editTitle">
-
-        <label>รายละเอียด</label>
-        <textarea id="editDescription" rows="3"></textarea>
-
-        <label>สถานที่</label>
-        <input type="text" id="editLocation">
-
-        <label>จำนวนที่นั่ง (เว้นว่าง = ไม่จำกัด)</label>
-        <input type="number" id="editMaxParticipants" min="1" placeholder="เช่น 50">
-
-        <label>ชั่วโมงกิจกรรม</label>
-        <input type="number" id="editActivityHours" min="0" max="24" step="0.5" placeholder="เช่น 3">
-
-        <label>รหัสเช็คอิน</label>
-        <input type="text" id="editCheckinCode" maxlength="10">
-
-        <label>เปิดให้ชั้นปี (ไม่เลือก = ทุกชั้นปี)</label>
-        <div class="year-check-row">
-            <label><input type="checkbox" value="1" class="edit-year-checkbox"> ปี 1</label>
-            <label><input type="checkbox" value="2" class="edit-year-checkbox"> ปี 2</label>
-            <label><input type="checkbox" value="3" class="edit-year-checkbox"> ปี 3</label>
-            <label><input type="checkbox" value="4" class="edit-year-checkbox"> ปี 4</label>
+        <div class="modal-header">
+            <button class="close-btn" onclick="closeModal('editModal')">&times;</button>
+            <h2>แก้ไขกิจกรรม</h2>
         </div>
+        <div class="modal-body">
+            <input type="hidden" id="editEventId">
+            <div class="field-group">
+                <label>ชื่อกิจกรรม</label>
+                <input type="text" id="editTitle" placeholder="ชื่อกิจกรรม">
+            </div>
+            <div class="field-group">
+                <label>รายละเอียด</label>
+                <textarea id="editDescription" rows="3" placeholder="รายละเอียด"></textarea>
+            </div>
+            <div class="field-group">
+                <label>สถานที่</label>
+                <input type="text" id="editLocation" placeholder="สถานที่จัดกิจกรรม">
+            </div>
+            <div class="field-row">
+                <div class="field-group">
+                    <label>จำนวนที่นั่ง</label>
+                    <input type="number" id="editMaxParticipants" min="1" placeholder="ไม่จำกัด">
+                </div>
+                <div class="field-group">
+                    <label>ชั่วโมงกิจกรรม</label>
+                    <input type="number" id="editActivityHours" min="0" max="24" step="0.5" placeholder="เช่น 3">
+                </div>
+            </div>
+            <div class="field-group">
+                <label>รหัสเช็คอิน</label>
+                <input type="text" id="editCheckinCode" maxlength="10" placeholder="เช่น ABC123">
+            </div>
+            <div class="field-group">
+                <label>เปิดให้ชั้นปี <span style="font-weight:400;color:#6b7f72">(ไม่เลือก = ทุกชั้นปี)</span></label>
+                <div class="year-check-row">
+                    <?php for($y=1;$y<=8;$y++): ?>
+                    <label class="year-chip"><input type="checkbox" value="<?=$y?>" class="edit-year-checkbox"> ปี <?=$y?></label>
+                    <?php endfor; ?>
+                </div>
+            </div>
+            <div class="field-row">
+                <div class="field-group">
+                    <label>วันเวลาเริ่ม</label>
+                    <input type="datetime-local" id="editStart">
+                </div>
+                <div class="field-group">
+                    <label>วันเวลาสิ้นสุด</label>
+                    <input type="datetime-local" id="editEnd">
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn-primary-modal" onclick="submitEditEvent()">บันทึกการแก้ไข</button>
+                <div class="status-msg" id="editStatusMsg"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
 
-        <label>วันเวลาเริ่ม</label>
-        <input type="datetime-local" id="editStart">
-
-        <label>วันเวลาสิ้นสุด</label>
-        <input type="datetime-local" id="editEnd">
-
-        <button class="btn" style="width:100%;" onclick="submitEditEvent()">บันทึกการแก้ไข</button>
-        <div class="status-msg" id="editStatusMsg"></div>
+<?php if ($isAdmin): ?>
+<!-- Modal สร้างกิจกรรมใหม่ -->
+<div class="modal-overlay2" id="createModal">
+    <div class="modal-box2">
+        <div class="modal-header">
+            <button class="close-btn" onclick="closeModal('createModal')">&times;</button>
+            <h2>เพิ่มกิจกรรมใหม่</h2>
+        </div>
+        <div class="modal-body">
+            <div class="field-group">
+                <label>ชื่อกิจกรรม <span style="color:#c0392b">*</span></label>
+                <input type="text" id="createTitle" placeholder="ชื่อกิจกรรม">
+            </div>
+            <div class="field-group">
+                <label>รายละเอียด</label>
+                <textarea id="createDescription" rows="3" placeholder="รายละเอียดกิจกรรม"></textarea>
+            </div>
+            <div class="field-group">
+                <label>สถานที่</label>
+                <input type="text" id="createLocation" placeholder="สถานที่จัดกิจกรรม">
+            </div>
+            <div class="field-row">
+                <div class="field-group">
+                    <label>จำนวนที่นั่ง</label>
+                    <input type="number" id="createMaxParticipants" min="1" placeholder="ไม่จำกัด">
+                </div>
+                <div class="field-group">
+                    <label>ชั่วโมงกิจกรรม</label>
+                    <input type="number" id="createActivityHours" min="0" max="24" step="0.5" placeholder="เช่น 3">
+                </div>
+            </div>
+            <div class="field-group">
+                <label>รหัสเช็คอิน <span style="font-weight:400;color:#6b7f72">(เว้น = สุ่มอัตโนมัติ)</span></label>
+                <input type="text" id="createCheckinCode" maxlength="10" placeholder="เช่น ABC123">
+            </div>
+            <div class="field-group">
+                <label>เปิดให้ชั้นปี <span style="font-weight:400;color:#6b7f72">(ไม่เลือก = ทุกชั้นปี)</span></label>
+                <div class="year-check-row">
+                    <?php for($y=1;$y<=8;$y++): ?>
+                    <label class="year-chip"><input type="checkbox" value="<?=$y?>" class="create-year-checkbox"> ปี <?=$y?></label>
+                    <?php endfor; ?>
+                </div>
+            </div>
+            <div class="field-row">
+                <div class="field-group">
+                    <label>วันเวลาเริ่ม <span style="color:#c0392b">*</span></label>
+                    <input type="datetime-local" id="createStart">
+                </div>
+                <div class="field-group">
+                    <label>วันเวลาสิ้นสุด <span style="color:#c0392b">*</span></label>
+                    <input type="datetime-local" id="createEnd">
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn-primary-modal" onclick="submitCreateEvent()">สร้างกิจกรรม</button>
+                <div class="status-msg" id="createStatusMsg"></div>
+            </div>
+        </div>
     </div>
 </div>
 <?php endif; ?>
@@ -239,6 +503,8 @@ let currentRegistered = false;
 let currentIsFull = false;
 let currentIsYearAllowed = true;
 let currentIsPast = false;
+let calendarSearchText = '';
+let calendarFilterValue = 'all';
 
 document.addEventListener('DOMContentLoaded', function () {
     const calendarEl = document.getElementById('calendar');
@@ -251,51 +517,72 @@ document.addEventListener('DOMContentLoaded', function () {
             center: 'title',
             right: 'dayGridMonth,timeGridWeek,listWeek'
         },
-        events: 'api/events.php',
-        eventDidMount: function () {
-            // เรียก filter หลัง event ทุกตัว mount เสร็จ (เรียกครั้งเดียวไม่วนซ้ำ เพราะไม่ผูกกับ setProp)
-            applyCalendarFilters();
+        events: function(fetchInfo, successCallback, failureCallback) {
+            const params = new URLSearchParams();
+            if (calendarSearchText) params.set('search', calendarSearchText);
+            if (calendarFilterValue && calendarFilterValue !== 'all') params.set('filter', calendarFilterValue);
+            fetch('api/events.php?' + params.toString())
+                .then(r => r.json())
+                .then(data => successCallback(data))
+                .catch(e => failureCallback(e));
         },
         eventClick: function (info) {
             currentEventId = info.event.id;
 
+            // Header
             document.getElementById('evTitle').textContent = info.event.title;
 
-            const start = info.event.start ? info.event.start.toLocaleString('th-TH') : '';
-            const end = info.event.end ? info.event.end.toLocaleString('th-TH') : '';
-            document.getElementById('evTime').textContent = `เวลา: ${start} - ${end}`;
-
-            const loc = info.event.extendedProps.location || '-';
-            document.getElementById('evLocation').textContent = `สถานที่: ${loc}`;
-
-            const desc = info.event.extendedProps.description || 'ไม่มีรายละเอียดเพิ่มเติม';
-            document.getElementById('evDescription').textContent = desc;
-
-            const maxP = info.event.extendedProps.maxParticipants;
+            // Meta rows
+            const start    = info.event.start;
+            const end      = info.event.end || start;
+            const loc      = info.event.extendedProps.location || '-';
+            const hours    = info.event.extendedProps.activityHours;
+            const maxP     = info.event.extendedProps.maxParticipants;
             const regCount = info.event.extendedProps.registeredCount;
-            let seatText = 'ที่นั่ง: ไม่จำกัด';
+            const targetYears = info.event.extendedProps.targetYears;
+            const desc     = info.event.extendedProps.description || '';
+
+            const fmt = d => d ? d.toLocaleString('th-TH', {dateStyle:'medium', timeStyle:'short'}) : '';
             let isFull = false;
+            let seatText = 'ไม่จำกัดที่นั่ง';
             if (maxP !== null && maxP !== undefined) {
-                seatText = `ที่นั่ง: ${regCount} / ${maxP} คน`;
+                seatText = `${regCount} / ${maxP} คน`;
                 isFull = regCount >= maxP;
             }
-            document.getElementById('evSeats').textContent = seatText;
-            const hours = info.event.extendedProps.activityHours;
-            document.getElementById('evHours').textContent = hours > 0 ? `ชั่วโมงกิจกรรม: ${hours} ชม.` : '';
 
-            const targetYears = info.event.extendedProps.targetYears;
-            let yearText = 'เปิดให้ทุกชั้นปี';
             let isYearAllowed = true;
+            let yearText = 'ทุกชั้นปี';
             if (targetYears) {
                 const yearsArr = targetYears.split(',');
-                yearText = 'เปิดให้ชั้นปี: ' + yearsArr.map(y => 'ปี ' + y).join(', ');
+                yearText = yearsArr.map(y => 'ปี ' + y).join(', ');
                 isYearAllowed = myYear !== null && yearsArr.includes(String(myYear));
             }
-            document.getElementById('evYears').textContent = yearText;
 
             const now = new Date();
-            const eventEnd = info.event.end || info.event.start;
-            const isPast = eventEnd && eventEnd < now;
+            const isPast = end && end < now;
+
+            // Build meta
+            const metaEl = document.getElementById('evMeta');
+            metaEl.innerHTML = [
+                `<div class="ev-meta-row"><span class="icon">🕒</span><span>${fmt(start)} — ${fmt(end)}</span></div>`,
+                `<div class="ev-meta-row"><span class="icon">📍</span><span>${loc}</span></div>`,
+                hours > 0 ? `<div class="ev-meta-row"><span class="icon">⏱️</span><span><strong>${hours} ชั่วโมง</strong></span></div>` : '',
+                `<div class="ev-meta-row"><span class="icon">👥</span><span>${seatText}</span></div>`,
+                `<div class="ev-meta-row"><span class="icon">🎓</span><span>${yearText}</span></div>`,
+            ].join('');
+
+            // Description
+            const descEl = document.getElementById('evDescription');
+            if (desc) { descEl.textContent = desc; descEl.style.display = ''; }
+            else { descEl.style.display = 'none'; }
+
+            // Badges
+            const badgesEl = document.getElementById('evBadges');
+            let badges = [];
+            if (isPast) badges.push('<span class="ev-badge ev-badge-grey">สิ้นสุดแล้ว</span>');
+            else        badges.push('<span class="ev-badge ev-badge-green">กำลังรับสมัคร</span>');
+            if (isFull) badges.push('<span class="ev-badge ev-badge-red">ที่นั่งเต็ม</span>');
+            badgesEl.innerHTML = badges.join('');
 
             if (!isAdmin) {
                 currentRegistered = !!info.event.extendedProps.registered;
@@ -306,26 +593,25 @@ document.addEventListener('DOMContentLoaded', function () {
                 document.getElementById('regStatusMsg').textContent = '';
             } else {
                 const code = info.event.extendedProps.checkinCode;
-                document.getElementById('evCheckinCode').textContent = code ? `รหัสเช็คอิน: ${code}` : '';
-
-                const qrWrap = document.getElementById('evQrCode');
+                const qrSection = document.getElementById('evQrSection');
+                const codeBadge = document.getElementById('evCheckinCodeBadge');
+                const qrWrap    = document.getElementById('evQrCode');
                 qrWrap.innerHTML = '';
+                codeBadge.innerHTML = '';
                 if (code) {
+                    qrSection.style.display = '';
+                    codeBadge.innerHTML = `<div class="checkin-code-badge">${code}</div>`;
                     new QRCode(qrWrap, {
                         text: `${window.location.origin}/uni-calendar/public/checkin.php?auto_event=${currentEventId}&auto_code=${code}`,
-                        width: 140,
-                        height: 140
+                        width: 140, height: 140
                     });
+                } else {
+                    qrSection.style.display = 'none';
                 }
-                document.getElementById('printListBtn').onclick = function () {
+                document.getElementById('printListBtn').onclick = () =>
                     window.open('print_attendees.php?event_id=' + currentEventId, '_blank');
-                };
-                document.getElementById('editBtn').onclick = function () {
-                    openEditModal(currentEventId);
-                };
-                document.getElementById('deleteBtn').onclick = function () {
-                    deleteEvent(currentEventId);
-                };
+                document.getElementById('editBtn').onclick = () => openEditModal(currentEventId);
+                document.getElementById('deleteBtn').onclick = () => deleteEvent(currentEventId);
             }
 
             document.getElementById('eventModal').classList.add('active');
@@ -348,46 +634,37 @@ function applyCalendarFilters() {
     const filterSelect = document.getElementById('filterRegistered');
     const filterValue = filterSelect ? filterSelect.value : 'all';
 
-    calendar.getEvents().forEach(ev => {
-        let visible = true;
-        if (searchText && !ev.title.toLowerCase().includes(searchText)) visible = false;
-        if (filterValue === 'registered' && !ev.extendedProps.registered) visible = false;
-        if (filterValue === 'not_registered' && ev.extendedProps.registered) visible = false;
-
-        const el = ev._def ? null : null; // no-op, keep ev object reference clean
-        if (ev.el) {
-            ev.el.style.display = visible ? '' : 'none';
-        }
-    });
+    // FullCalendar 6: ใช้ setProp ไม่ได้ ต้องใช้ refetchEvents + eventDataTransform หรือ filter ผ่าน hidden
+    // วิธีที่ถูกต้องคือ re-filter source แล้ว refetch
+    calendarSearchText = searchText;
+    calendarFilterValue = filterValue;
+    calendar.refetchEvents();
 }
 
 function updateRegisterButton() {
     const btn = document.getElementById('registerBtn');
+    // reset style
+    btn.className = 'btn-primary-modal';
+    btn.disabled = false;
     if (currentIsPast && !currentRegistered) {
         btn.textContent = 'กิจกรรมนี้ผ่านไปแล้ว';
-        btn.style.borderColor = '#999';
-        btn.style.color = '#999';
+        btn.style.background = '#e0e0e0'; btn.style.color = '#999'; btn.style.cursor = 'not-allowed';
         btn.disabled = true;
     } else if (currentRegistered) {
         btn.textContent = 'ยกเลิกลงทะเบียน';
-        btn.style.borderColor = '#c0392b';
-        btn.style.color = '#c0392b';
-        btn.disabled = false;
+        btn.style.background = '#fff'; btn.style.color = '#b71c1c';
+        btn.style.border = '1.5px solid #f08080'; btn.style.cursor = 'pointer';
     } else if (!currentIsYearAllowed) {
         btn.textContent = 'ชั้นปีของคุณไม่สามารถลงทะเบียนได้';
-        btn.style.borderColor = '#999';
-        btn.style.color = '#999';
+        btn.style.background = '#e0e0e0'; btn.style.color = '#999'; btn.style.cursor = 'not-allowed';
         btn.disabled = true;
     } else if (currentIsFull) {
         btn.textContent = 'ที่นั่งเต็มแล้ว';
-        btn.style.borderColor = '#999';
-        btn.style.color = '#999';
+        btn.style.background = '#e0e0e0'; btn.style.color = '#999'; btn.style.cursor = 'not-allowed';
         btn.disabled = true;
     } else {
         btn.textContent = 'ลงทะเบียนเข้าร่วม';
-        btn.style.borderColor = '#1e5631';
-        btn.style.color = '#1e5631';
-        btn.disabled = false;
+        btn.style.background = ''; btn.style.color = ''; btn.style.border = ''; btn.style.cursor = '';
     }
 }
 
@@ -414,6 +691,10 @@ async function toggleRegister() {
             calendar.refetchEvents();
         } else if (result.error === 'year_not_allowed') {
             msgEl.textContent = 'กิจกรรมนี้ไม่เปิดให้ชั้นปีของคุณลงทะเบียน';
+        } else if (result.error === 'event_started') {
+            msgEl.textContent = 'ปิดรับลงทะเบียนแล้ว เนื่องจากกิจกรรมเริ่มต้นแล้ว';
+            currentIsFull = true;
+            updateRegisterButton();
         } else {
             msgEl.textContent = 'เกิดข้อผิดพลาด กรุณาลองใหม่';
         }
@@ -428,7 +709,64 @@ function closeModal(id) {
 
 <?php if ($isAdmin): ?>
 function openCreateModal() {
+    // reset ฟอร์ม
+    ['createTitle','createDescription','createLocation','createMaxParticipants',
+     'createActivityHours','createCheckinCode','createStart','createEnd'].forEach(id => {
+        document.getElementById(id).value = '';
+    });
+    document.querySelectorAll('.create-year-checkbox').forEach(cb => cb.checked = false);
+    document.getElementById('createStatusMsg').textContent = '';
     document.getElementById('createModal').classList.add('active');
+}
+
+async function submitCreateEvent() {
+    const title       = document.getElementById('createTitle').value.trim();
+    const description = document.getElementById('createDescription').value.trim();
+    const location    = document.getElementById('createLocation').value.trim();
+    const maxP        = document.getElementById('createMaxParticipants').value.trim();
+    const hours       = document.getElementById('createActivityHours').value.trim();
+    const checkinCode = document.getElementById('createCheckinCode').value.trim();
+    const targetYears = Array.from(document.querySelectorAll('.create-year-checkbox:checked')).map(cb => cb.value);
+    const start       = document.getElementById('createStart').value;
+    const end         = document.getElementById('createEnd').value;
+    const msgEl       = document.getElementById('createStatusMsg');
+
+    if (!title || !start || !end) {
+        msgEl.textContent = 'กรุณากรอกชื่อกิจกรรมและวันเวลาให้ครบ';
+        msgEl.style.color = '#b71c1c';
+        return;
+    }
+
+    msgEl.textContent = 'กำลังบันทึก...';
+    msgEl.style.color = '#666';
+
+    const res = await fetch('api/manage_event.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            action:           'create',
+            title:            title,
+            description:      description,
+            location:         location,
+            max_participants: maxP,
+            activity_hours:  hours,
+            checkin_code:    checkinCode,
+            target_years:    targetYears,
+            start_datetime:  start.replace('T', ' ') + ':00',
+            end_datetime:    end.replace('T', ' ') + ':00',
+        })
+    });
+    const result = await res.json();
+
+    if (result.success) {
+        msgEl.textContent = 'สร้างกิจกรรมสำเร็จ!';
+        msgEl.style.color = '#1e5631';
+        calendar.refetchEvents();
+        setTimeout(() => closeModal('createModal'), 900);
+    } else {
+        msgEl.textContent = 'เกิดข้อผิดพลาด กรุณาลองใหม่';
+        msgEl.style.color = '#b71c1c';
+    }
 }
 
 

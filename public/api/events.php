@@ -16,6 +16,20 @@ $eventModel = new Event($pdo);
 $events = $eventModel->getAllForUser($_SESSION['user_id']);
 $isAdmin = $_SESSION['role'] === 'admin';
 
+// Filter support for calendar.php refetchEvents approach
+$searchText   = isset($_GET['search']) ? strtolower(trim($_GET['search'])) : '';
+$filterValue  = isset($_GET['filter']) ? $_GET['filter'] : 'all';
+
+if ($searchText !== '' || $filterValue !== 'all') {
+    $events = array_filter($events, function($e) use ($searchText, $filterValue) {
+        if ($searchText !== '' && strpos(strtolower($e['title']), $searchText) === false) return false;
+        if ($filterValue === 'registered'     && !$e['is_registered']) return false;
+        if ($filterValue === 'not_registered' &&  $e['is_registered']) return false;
+        return true;
+    });
+    $events = array_values($events);
+}
+
 $formatted = array_map(function ($e) use ($isAdmin) {
     return [
         'id'    => $e['id'],
