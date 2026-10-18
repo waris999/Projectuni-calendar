@@ -1,48 +1,18 @@
 <?php
-// public/api/register_event.php
-session_start();
+require_once __DIR__ . '/../../src/security.php';
 header('Content-Type: application/json; charset=utf-8');
-
-require_once __DIR__ . '/../../config/database.php';
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') { http_response_code(405); header('Allow: POST'); exit(json_encode(['error'=>'method_not_allowed'])); }
+if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'student') { http_response_code(403); exit(json_encode(['error'=>'forbidden'])); }
 require_once __DIR__ . '/../../src/Registration.php';
-
-if (!isset($_SESSION['user_id'])) {
-    http_response_code(401);
-    echo json_encode(['error' => 'unauthorized']);
-    exit;
-}
-
 $data = json_decode(file_get_contents('php://input'), true);
-$eventId = (int) ($data['event_id'] ?? 0);
-$action  = $data['action'] ?? '';
-
-if ($eventId <= 0 || !in_array($action, ['register', 'cancel'], true)) {
-    http_response_code(400);
-    echo json_encode(['error' => 'invalid_request']);
-    exit;
+$eventId = filter_var($data['event_id'] ?? null, FILTER_VALIDATE_INT, ['options'=>['min_range'=>1]]);
+$action = $data['action'] ?? '';
+if (!$eventId || !in_array($action, ['register','cancel'], true)) { http_response_code(400); exit(json_encode(['error'=>'invalid_request'])); }
+try {
+    $model = new Registration($pdo);
+    $result = $model->$action((int)$_SESSION['user_id'], $eventId);
+    echo json_encode(['success'=>$result === true, 'registered'=>$result === true && $action === 'register', 'error'=>is_string($result) ? $result : null]);
+} catch (Throwable $e) {
+    error_log('Registration operation failed');
+    http_response_code(500); echo json_encode(['success'=>false,'error'=>'server_error']);
 }
-
-$regModel = new Registration($pdo);
-$userId = $_SESSION['user_id'];
-
-if ($action === 'register') {
-    $result = $regModel->register($userId, $eventId);
-
-    if ($result === 'full') {
-        echo json_encode(['success' => false, 'error' => 'full']);
-        exit;
-    }
-    if ($result === 'year_not_allowed') {
-        echo json_encode(['success' => false, 'error' => 'year_not_allowed']);
-        exit;
-    }
-    if ($result === 'event_started') {
-        echo json_encode(['success' => false, 'error' => 'event_started']);
-        exit;
-    }
-    $ok = $result;
-} else {
-    $ok = $regModel->cancel($userId, $eventId);
-}
-
-echo json_encode(['success' => $ok, 'registered' => $action === 'register']);

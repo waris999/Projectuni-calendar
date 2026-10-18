@@ -1,6 +1,7 @@
 <?php
+require_once __DIR__ . '/../../src/security.php';
 // public/api/events.php
-session_start();
+/* session initialized by security.php */
 header('Content-Type: application/json; charset=utf-8');
 
 require_once __DIR__ . '/../../config/database.php';
@@ -40,6 +41,7 @@ $formatted = array_map(function ($e) use ($isAdmin) {
         'description'      => $e['description'],
         'location'         => $e['location'],
         'registered'       => (bool) $e['is_registered'],
+        'attended'         => (bool) $e['is_attended'],
         'maxParticipants'  => $e['max_participants'],
         'registeredCount'  => (int) $e['registered_count'],
         'targetYears'      => $e['target_years'],

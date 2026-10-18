@@ -1,5 +1,6 @@
 <?php
-session_start();
+require_once __DIR__ . '/../src/security.php';
+/* session initialized by security.php */
 if (!isset($_SESSION['user_id'])) {
     header('Location: index.php');
     exit;
@@ -33,11 +34,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($_FILES['avatar']['size'] > 2 * 1024 * 1024) {
             $error = 'ขนาดไฟล์ต้องไม่เกิน 2MB';
         } else {
-            $ext         = pathinfo($_FILES['avatar']['name'], PATHINFO_EXTENSION);
-            $newFilename = 'user_' . $_SESSION['user_id'] . '_' . time() . '.' . $ext;
+            try { $ext = imageExtension($_FILES['avatar']['tmp_name']); } catch (InvalidArgumentException $e) { $error = 'ไฟล์รูปไม่ถูกต้อง'; }
+            if (!isset($ext)) { $ext = null; }
+            $newFilename = 'user_' . $_SESSION['user_id'] . '_' . bin2hex(random_bytes(16)) . '.' . $ext;
             $destination = __DIR__ . '/img/avatars/' . $newFilename;
 
-            if (move_uploaded_file($_FILES['avatar']['tmp_name'], $destination)) {
+            if ($ext !== null && move_uploaded_file($_FILES['avatar']['tmp_name'], $destination)) {
                 if (!empty($user['profile_image'])) {
                     $oldPath = __DIR__ . '/img/avatars/' . $user['profile_image'];
                     if (file_exists($oldPath)) unlink($oldPath);
@@ -99,14 +101,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $avatarSrc = !empty($user['profile_image'])
     ? 'img/avatars/' . htmlspecialchars($user['profile_image'])
-    : 'img/avatar-placeholder.png';
+    : 'img/avatar-placeholder.svg';
 ?>
 <!DOCTYPE html>
 <html lang="th">
 <head>
 <meta charset="UTF-8">
 <title>ข้อมูลส่วนตัว | Uni Calendar</title>
-<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/style.css?v=<?= filemtime(__DIR__ . '/css/style.css') ?>">
 <style>
     .profile-card { max-width: 480px; }
     .avatar-upload-wrap { text-align: center; margin-bottom: 8px; }
@@ -148,7 +150,7 @@ $avatarSrc = !empty($user['profile_image'])
 <aside class="sidebar">
     <div class="profile">
         <a href="profile.php">
-            <img src="<?= $avatarSrc ?>" alt="avatar">
+            <img src="<?= $avatarSrc ?>" alt="รูปโปรไฟล์" onerror="this.onerror=null;this.src='img/avatar-placeholder.svg';">
         </a>
         <div class="name"><?= htmlspecialchars($user['fullname']) ?></div>
         <div class="role">
@@ -165,8 +167,8 @@ $avatarSrc = !empty($user['profile_image'])
         <a href="calendar.php">📅 ปฏิทินกิจกรรม</a>
         <?php if ($isAdmin): ?>
             <a href="admin_dashboard.php">📊 แดชบอร์ด</a>
-            <a href="admin_users.php">👥 จัดการผู้ใช้</a>
             <a href="admin_hours.php">⏱️ ชั่วโมงกิจกรรม</a>
+            <a href="admin_users.php">👥 จัดการผู้ใช้</a>
         <?php else: ?>
             <a href="checkin.php">✅ เช็คอินกิจกรรม</a>
             <a href="history.php">🕘 ประวัติกิจกรรม</a>
@@ -175,7 +177,10 @@ $avatarSrc = !empty($user['profile_image'])
             🔔 แจ้งเตือน<?= $unreadCount > 0
                 ? ' <span class="nav-badge">' . $unreadCount . '</span>' : '' ?>
         </a>
-        <a href="logout.php">🚪 ออกจากระบบ</a>
+        <form method="POST" action="logout.php" class="logout-form" onsubmit="return confirm('ยืนยันออกจากระบบหรือไม่?');">
+            <?= csrfField() ?>
+            <button type="submit" class="logout-button">🚪 ออกจากระบบ</button>
+        </form>
     </nav>
 </aside>
 
@@ -195,6 +200,7 @@ $avatarSrc = !empty($user['profile_image'])
         <div class="card profile-card">
             <h2>รูปโปรไฟล์</h2>
             <form method="POST" enctype="multipart/form-data">
+<?= csrfField() ?>
                 <div class="avatar-upload-wrap">
                     <img src="<?= $avatarSrc ?>" alt="avatar" id="avatarPreview">
                     <br>
@@ -211,6 +217,7 @@ $avatarSrc = !empty($user['profile_image'])
         <div class="card profile-card">
             <h2>แก้ไขข้อมูลส่วนตัว</h2>
             <form method="POST" class="profile-form">
+<?= csrfField() ?>
                 <label>รหัสนักศึกษา / Username</label>
                 <input type="text" value="<?= htmlspecialchars($user['username']) ?>" readonly>
 
@@ -252,6 +259,7 @@ $avatarSrc = !empty($user['profile_image'])
             <?php endif; ?>
 
             <form method="POST" class="profile-form">
+<?= csrfField() ?>
                 <label>รหัสผ่านเดิม</label>
                 <input type="password" name="old_password" required>
 

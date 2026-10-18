@@ -108,14 +108,15 @@ class User
     }
         public function getAll(string $search = '', string $roleFilter = '', string $yearFilter = ''): array
     {
-        $sql = "SELECT u.*, 
+        $sql = "SELECT u.*,
                 (SELECT COUNT(*) FROM registrations r WHERE r.user_id = u.id AND r.status IN ('registered','attended')) AS reg_count
                 FROM users u WHERE 1=1";
         $params = [];
 
         if ($search !== '') {
-            $sql .= " AND (u.fullname LIKE :search OR u.username LIKE :search)";
+            $sql .= " AND (u.fullname LIKE :search OR u.username LIKE :username_search)";
             $params['search'] = '%' . $search . '%';
+            $params['username_search'] = '%' . $search . '%';
         }
         if ($roleFilter !== '') {
             $sql .= " AND u.role = :role";

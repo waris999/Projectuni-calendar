@@ -1,134 +1,80 @@
 <?php
-// src/Registration.php
-
 require_once __DIR__ . '/../config/database.php';
 
 class Registration
 {
-    private PDO $pdo;
+    public function __construct(private PDO $pdo) {}
 
-    public function __construct(PDO $pdo)
-    {
-        $this->pdo = $pdo;
-    }
-
-    // เช็คว่า user คนนี้ลงทะเบียน event นี้ไว้หรือยัง
     public function isRegistered(int $userId, int $eventId): bool
     {
-        $stmt = $this->pdo->prepare(
-            "SELECT id FROM registrations
-            WHERE user_id = :user_id AND event_id = :event_id AND status = 'registered'"
-        );
-        $stmt->execute(['user_id' => $userId, 'event_id' => $eventId]);
-        return (bool) $stmt->fetch();
+        $stmt = $this->pdo->prepare("SELECT id FROM registrations WHERE user_id = ? AND event_id = ? AND status IN ('registered','attended')");
+        $stmt->execute([$userId, $eventId]);
+        return (bool)$stmt->fetch();
     }
 
-    // ลงทะเบียนเข้าร่วม (ถ้าเคยยกเลิกไว้ก่อน ก็เปลี่ยนกลับเป็น registered แทนการ insert ซ้ำ)
+    // Every transition locks the same event first, serializing seat allocation.
+    private function change(int $userId, int $eventId, callable $action): bool|string
+    {
+        $this->pdo->beginTransaction();
+        try {
+            $stmt = $this->pdo->prepare('SELECT * FROM events WHERE id = ? FOR UPDATE');
+            $stmt->execute([$eventId]);
+            $event = $stmt->fetch();
+            if (!$event) { $this->pdo->rollBack(); return 'event_not_found'; }
+            $stmt = $this->pdo->prepare('SELECT student_year, role FROM users WHERE id = ?');
+            $stmt->execute([$userId]);
+            $user = $stmt->fetch();
+            if (!$user || $user['role'] !== 'student') { $this->pdo->rollBack(); return 'forbidden'; }
+            $stmt = $this->pdo->prepare('SELECT * FROM registrations WHERE user_id = ? AND event_id = ? FOR UPDATE');
+            $stmt->execute([$userId, $eventId]);
+            $reg = $stmt->fetch();
+            $now = $this->pdo->query('SELECT NOW()')->fetchColumn();
+            $result = $action($event, $user, $reg, $now);
+            $this->pdo->commit();
+            return $result;
+        } catch (Throwable $e) {
+            if ($this->pdo->inTransaction()) $this->pdo->rollBack();
+            throw $e;
+        }
+    }
+
     public function register(int $userId, int $eventId): bool|string
     {
-        // ดึงข้อมูล event + ข้อมูล user มาเช็คสิทธิ์ก่อน
-        $eventStmt = $this->pdo->prepare("SELECT max_participants, target_years, start_datetime FROM events WHERE id = :id");
-        $eventStmt->execute(['id' => $eventId]);
-        $event = $eventStmt->fetch();
-
-        $userStmt = $this->pdo->prepare("SELECT student_year FROM users WHERE id = :id");
-        $userStmt->execute(['id' => $userId]);
-        $user = $userStmt->fetch();
-
-        // เช็คว่ากิจกรรมเริ่มแล้วหรือยัง (ถ้าเริ่มแล้วปิดลงทะเบียน)
-        if ($event) {
-            $nowStmt = $this->pdo->query("SELECT NOW() AS now");
-            $nowRow = $nowStmt->fetch();
-            if ($event['start_datetime'] <= $nowRow['now']) {
-                return 'event_started';
+        return $this->change($userId, $eventId, function ($event, $user, $reg, $now) use ($userId, $eventId) {
+            if ($reg && $reg['status'] === 'attended') return 'already_checked_in';
+            if ($event['start_datetime'] <= $now) return 'event_started';
+            if ($reg && $reg['status'] === 'registered') return true;
+            if ($event['target_years'] !== null && !in_array((string)$user['student_year'], explode(',', $event['target_years']), true)) return 'year_not_allowed';
+            if ($event['max_participants'] !== null) {
+                $stmt = $this->pdo->prepare("SELECT COUNT(*) FROM registrations WHERE event_id = ? AND status IN ('registered','attended')");
+                $stmt->execute([$eventId]);
+                if ((int)$stmt->fetchColumn() >= (int)$event['max_participants']) return 'full';
             }
-        }
-
-        // เช็คว่าชั้นปีตรงกับที่กิจกรรมกำหนดไหม (ถ้า target_years เป็น NULL แปลว่าเปิดทุกปี)
-        if ($event && $event['target_years'] !== null) {
-            $allowedYears = explode(',', $event['target_years']);
-            if (!$user || !in_array((string) $user['student_year'], $allowedYears, true)) {
-                return 'year_not_allowed';
-            }
-        }
-
-        // เช็คที่นั่งเต็มไหม
-        if ($event && $event['max_participants'] !== null) {
-            $countStmt = $this->pdo->prepare(
-                "SELECT COUNT(*) as cnt FROM registrations
-                WHERE event_id = :event_id AND status = 'registered'"
-            );
-            $countStmt->execute(['event_id' => $eventId]);
-            $current = $countStmt->fetch()['cnt'];
-
-            if ($current >= $event['max_participants']) {
-                return 'full';
-            }
-        }
-
-        $check = $this->pdo->prepare(
-            "SELECT id FROM registrations WHERE user_id = :user_id AND event_id = :event_id"
-        );
-        $check->execute(['user_id' => $userId, 'event_id' => $eventId]);
-        $existing = $check->fetch();
-
-        if ($existing) {
-            $stmt = $this->pdo->prepare(
-                "UPDATE registrations SET status = 'registered', registered_at = NOW() WHERE id = :id"
-            );
-            return $stmt->execute(['id' => $existing['id']]);
-        }
-
-        $stmt = $this->pdo->prepare(
-            "INSERT INTO registrations (user_id, event_id, status) VALUES (:user_id, :event_id, 'registered')"
-        );
-        return $stmt->execute(['user_id' => $userId, 'event_id' => $eventId]);
+            if ($reg) return $this->pdo->prepare("UPDATE registrations SET status = 'registered', registered_at = NOW() WHERE id = ?")->execute([$reg['id']]);
+            return $this->pdo->prepare("INSERT INTO registrations (user_id,event_id,status) VALUES (?,?,'registered')")->execute([$userId,$eventId]);
+        });
     }
 
-    // ยกเลิกลงทะเบียน
-    public function cancel(int $userId, int $eventId): bool
+    public function cancel(int $userId, int $eventId): bool|string
     {
-        $stmt = $this->pdo->prepare(
-            "UPDATE registrations SET status = 'cancelled'
-            WHERE user_id = :user_id AND event_id = :event_id"
-        );
-        return $stmt->execute(['user_id' => $userId, 'event_id' => $eventId]);
+        return $this->change($userId, $eventId, function ($event, $user, $reg, $now) {
+            if (!$reg || $reg['status'] === 'cancelled') return 'not_registered';
+            if ($reg['status'] === 'attended') return 'already_checked_in';
+            if ($event['start_datetime'] <= $now) return 'event_started';
+            return $this->pdo->prepare("UPDATE registrations SET status = 'cancelled' WHERE id = ? AND status = 'registered'")->execute([$reg['id']]);
+        });
     }
-        // เช็คอินยืนยันการเข้าร่วมด้วยรหัส
+
     public function checkin(int $userId, int $eventId, string $code): string
     {
-        $regStmt = $this->pdo->prepare(
-            "SELECT id, status FROM registrations WHERE user_id = :user_id AND event_id = :event_id"
-        );
-        $regStmt->execute(['user_id' => $userId, 'event_id' => $eventId]);
-        $reg = $regStmt->fetch();
-
-        if (!$reg || $reg['status'] === 'cancelled') {
-            return 'not_registered';
-        }
-        if ($reg['status'] === 'attended') {
-            return 'already_checked_in';
-        }
-
-        $eventStmt = $this->pdo->prepare("SELECT checkin_code, start_datetime FROM events WHERE id = :id");
-        $eventStmt->execute(['id' => $eventId]);
-        $event = $eventStmt->fetch();
-
-        if (!$event) {
-            return 'event_not_found';
-        }
-        // เปรียบเทียบกับ NOW() ของ MySQL เพื่อหลีกเลี่ยงปัญหา timezone ของ PHP
-        $nowStmt = $this->pdo->query("SELECT NOW() AS now");
-        $nowRow = $nowStmt->fetch();
-        if ($event['start_datetime'] > $nowRow['now']) {
-            return 'not_started';
-        }
-        if (empty($event['checkin_code']) || strcasecmp(trim($code), $event['checkin_code']) !== 0) {
-            return 'wrong_code';
-        }
-
-        $update = $this->pdo->prepare("UPDATE registrations SET status = 'attended' WHERE id = :id");
-        $update->execute(['id' => $reg['id']]);
-        return 'success';
+        return (string)$this->change($userId, $eventId, function ($event, $user, $reg, $now) use ($code) {
+            if (!$reg || $reg['status'] === 'cancelled') return 'not_registered';
+            if ($reg['status'] === 'attended') return 'already_checked_in';
+            if ($event['start_datetime'] > $now) return 'not_started';
+            if ($event['end_datetime'] <= $now) return 'event_ended';
+            if (empty($event['checkin_code']) || !hash_equals(strtoupper($event['checkin_code']), strtoupper(trim($code)))) return 'wrong_code';
+            $this->pdo->prepare("UPDATE registrations SET status = 'attended' WHERE id = ? AND status = 'registered'")->execute([$reg['id']]);
+            return 'success';
+        });
     }
 }

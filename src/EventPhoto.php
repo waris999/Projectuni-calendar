@@ -38,12 +38,12 @@ class EventPhoto
     }
 
     // ลบรูป (เฉพาะเจ้าของ)
-    public function deletePhoto(int $photoId, int $userId): array|false
+    public function deletePhoto(int $photoId, int $userId, int $eventId): array|false
     {
         $stmt = $this->pdo->prepare(
-            "SELECT * FROM event_photos WHERE id = :id AND user_id = :user_id"
+            "SELECT * FROM event_photos WHERE id = :id AND user_id = :user_id AND event_id = :event_id"
         );
-        $stmt->execute(['id' => $photoId, 'user_id' => $userId]);
+        $stmt->execute(['id' => $photoId, 'user_id' => $userId, 'event_id' => $eventId]);
         $photo = $stmt->fetch();
 
         if (!$photo) return false;

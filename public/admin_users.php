@@ -1,5 +1,6 @@
 <?php
-session_start();
+require_once __DIR__ . '/../src/security.php';
+/* session initialized by security.php */
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
     header('Location: index.php');
     exit;
@@ -26,20 +27,20 @@ $users = $userModel->getAll($search, $roleFilter, $yearFilter);
 
 $avatarSrc = !empty($_SESSION['profile_image'])
     ? 'img/avatars/' . htmlspecialchars($_SESSION['profile_image'])
-    : 'img/avatar-placeholder.png';
+    : 'img/avatar-placeholder.svg';
 ?>
 <!DOCTYPE html>
 <html lang="th">
 <head>
 <meta charset="UTF-8">
 <title>จัดการผู้ใช้ | Uni Calendar</title>
-<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/style.css?v=<?= filemtime(__DIR__ . '/css/style.css') ?>">
 </head>
 <body class="app-layout">
 
 <aside class="sidebar">
     <div class="profile">
-        <a href="profile.php"><img src="<?= $avatarSrc ?>" alt="avatar"></a>
+        <a href="profile.php"><img src="<?= $avatarSrc ?>" alt="รูปโปรไฟล์" onerror="this.onerror=null;this.src='img/avatar-placeholder.svg';"></a>
         <div class="name"><?= htmlspecialchars($_SESSION['fullname']) ?></div>
         <div class="role">เจ้าหน้าที่</div>
     </div>
@@ -50,7 +51,10 @@ $avatarSrc = !empty($_SESSION['profile_image'])
         <a href="admin_hours.php">⏱️ ชั่วโมงกิจกรรม</a>
         <a href="admin_users.php" class="active">👥 จัดการผู้ใช้</a>
         <a href="notifications.php">🔔 แจ้งเตือน</a>
-        <a href="logout.php">🚪 ออกจากระบบ</a>
+        <form method="POST" action="logout.php" class="logout-form" onsubmit="return confirm('ยืนยันออกจากระบบหรือไม่?');">
+            <?= csrfField() ?>
+            <button type="submit" class="logout-button">🚪 ออกจากระบบ</button>
+        </form>
     </nav>
 </aside>
 
@@ -94,6 +98,7 @@ $avatarSrc = !empty($_SESSION['profile_image'])
                             <td>
                                 <?php if ((int) $u['id'] !== (int) $_SESSION['user_id']): ?>
                                     <form method="POST" onsubmit="return confirm('ยืนยันการลบผู้ใช้นี้? ข้อมูลลงทะเบียนทั้งหมดจะถูกลบไปด้วย');" style="display:inline;">
+<?= csrfField() ?>
                                         <input type="hidden" name="delete_user_id" value="<?= (int) $u['id'] ?>">
                                         <button type="submit" style="background:none; border:none; color:#c0392b; cursor:pointer; font-size:13px;">ลบ</button>
                                     </form>

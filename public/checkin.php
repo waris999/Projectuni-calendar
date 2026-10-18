@@ -1,5 +1,6 @@
 <?php
-session_start();
+require_once __DIR__ . '/../src/security.php';
+/* session initialized by security.php */
 if (!isset($_SESSION['user_id'])) {
     header('Location: index.php');
     exit;
@@ -71,8 +72,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['evidence_photo'])) {
                     continue;
                 }
 
-                $ext         = pathinfo($files['name'][$i], PATHINFO_EXTENSION);
-                $newFilename = 'ep_' . $_SESSION['user_id'] . '_' . $uploadEventId . '_' . time() . '_' . $i . '.' . $ext;
+                try { $ext = imageExtension($files['tmp_name'][$i]); } catch (InvalidArgumentException $e) { $ext = null; }
+                if ($ext === null) { $errors[] = 'ไฟล์รูปไม่ถูกต้อง'; continue; }
+                $newFilename = 'ep_' . $_SESSION['user_id'] . '_' . $uploadEventId . '_' . bin2hex(random_bytes(16)) . '_' . $i . '.' . $ext;
                 $dest        = __DIR__ . '/img/event_photos/' . $newFilename;
 
                 if (move_uploaded_file($files['tmp_name'][$i], $dest)) {
@@ -93,14 +95,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['evidence_photo'])) {
 
 $avatarSrc = !empty($_SESSION['profile_image'])
     ? 'img/avatars/' . htmlspecialchars($_SESSION['profile_image'])
-    : 'img/avatar-placeholder.png';
+    : 'img/avatar-placeholder.svg';
 ?>
 <!DOCTYPE html>
 <html lang="th">
 <head>
 <meta charset="UTF-8">
 <title>เช็คอินกิจกรรม | Uni Calendar</title>
-<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/style.css?v=<?= filemtime(__DIR__ . '/css/style.css') ?>">
 <style>
     .checkin-item {
         padding: 16px 0;
@@ -220,7 +222,7 @@ $avatarSrc = !empty($_SESSION['profile_image'])
 
 <aside class="sidebar">
     <div class="profile">
-        <a href="profile.php"><img src="<?= $avatarSrc ?>" alt="avatar"></a>
+        <a href="profile.php"><img src="<?= $avatarSrc ?>" alt="รูปโปรไฟล์" onerror="this.onerror=null;this.src='img/avatar-placeholder.svg';"></a>
         <div class="name"><?= htmlspecialchars($_SESSION['fullname']) ?></div>
         <div class="role">
             นักศึกษา<?= !empty($_SESSION['student_year'])
@@ -234,7 +236,10 @@ $avatarSrc = !empty($_SESSION['profile_image'])
         <a href="history.php">🕘 ประวัติกิจกรรม</a>
         <a href="notifications.php">🔔 แจ้งเตือน<?= $unreadCount > 0
             ? ' <span class="nav-badge">' . $unreadCount . '</span>' : '' ?></a>
-        <a href="logout.php">🚪 ออกจากระบบ</a>
+        <form method="POST" action="logout.php" class="logout-form" onsubmit="return confirm('ยืนยันออกจากระบบหรือไม่?');">
+            <?= csrfField() ?>
+            <button type="submit" class="logout-button">🚪 ออกจากระบบ</button>
+        </form>
     </nav>
 </aside>
 
@@ -273,9 +278,9 @@ $avatarSrc = !empty($_SESSION['profile_image'])
                     $isAttended = $ev['status'] === 'attended';
                     $hasStarted    = $ev['start_datetime'] <= $mysqlNow;
                     $isPast        = $ev['end_datetime'] < $mysqlNow;
-                    // ล็อคไม่ให้กรอก code เกิน 2 วันหลัง start_datetime
-                    $checkinDeadline = date('Y-m-d H:i:s', strtotime($ev['start_datetime']) + 2 * 86400);
-                    $isCheckinLocked = $mysqlNow > $checkinDeadline;
+                    // ปิดเช็คอินเมื่อกิจกรรมสิ้นสุด
+                    $checkinDeadline = $ev['end_datetime'];
+                    $isCheckinLocked = $mysqlNow >= $checkinDeadline;
                     // อนุญาตอัปโหลดรูปภายใน 2 วันหลัง end_datetime
                     $uploadDeadlineEv = date('Y-m-d H:i:s', strtotime($ev['end_datetime']) + 2 * 86400);
                     $canUpload = $mysqlNow <= $uploadDeadlineEv;
@@ -326,6 +331,7 @@ $avatarSrc = !empty($_SESSION['profile_image'])
                                 <?php if ($canUpload): ?>
                                     <!-- อัปโหลดได้ภายใน 2 วันหลังกิจกรรมสิ้นสุด -->
                                     <form method="POST" enctype="multipart/form-data">
+<?= csrfField() ?>
                                         <input type="hidden" name="upload_event_id" value="<?= (int)$ev['id'] ?>">
                                         <div class="evidence-upload">
                                             <label class="pick-btn" for="photo_<?= $ev['id'] ?>">
@@ -409,7 +415,7 @@ async function submitCheckin(eventId, btnEl) {
     try {
         const res = await fetch('api/checkin.php', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': <?= json_encode($_SESSION['csrf_token']) ?> },
             body: JSON.stringify({ event_id: eventId, code: code })
         });
         const result = await res.json();
@@ -425,6 +431,11 @@ async function submitCheckin(eventId, btnEl) {
         } else if (result.result === 'not_started') {
             msgEl.textContent = 'กิจกรรมยังไม่เริ่ม';
             msgEl.style.color = '#b71c1c';
+        } else if (result.result === 'event_ended') {
+            msgEl.textContent = 'กิจกรรมสิ้นสุดแล้ว หมดเวลาเช็คอิน';
+            msgEl.style.color = '#b71c1c';
+        } else if (result.result === 'rate_limited') {
+            msgEl.textContent = 'ลองหลายครั้งเกินไป กรุณารอ 15 นาที';
         } else if (result.result === 'already_checked_in') {
             msgEl.textContent = 'คุณเช็คอินไปแล้ว';
             msgEl.style.color = '#1e5631';
@@ -471,29 +482,6 @@ document.addEventListener('keydown', e => {
 });
 
 // ===== QR Scanner =====
-document.getElementById('openScannerBtn').addEventListener('click', function () {
-    const box = document.getElementById('qrScannerBox');
-    if (box.style.display === 'none') {
-        box.style.display = 'block';
-        box.innerHTML = '<div id="qrReader" style="width:100%;"></div>';
-        const scanner = new Html5Qrcode('qrReader');
-        scanner.start(
-            { facingMode: 'environment' },
-            { fps: 10, qrbox: 200 },
-            (decodedText) => {
-                scanner.stop();
-                box.style.display = 'none';
-                window.location.href = decodedText;
-            }
-        ).catch(() => {
-            box.innerHTML = '<p style="color:#b71c1c;font-size:13px;">เปิดกล้องไม่สำเร็จ กรุณาอนุญาตการใช้กล้อง</p>';
-        });
-    } else {
-        box.style.display = 'none';
-        box.innerHTML = '';
-    }
-});
-
 <?php if ($autoEventId > 0 && $autoCode !== ''): ?>
 window.addEventListener('DOMContentLoaded', function () {
     const btn = document.querySelector(`button[onclick="submitCheckin(<?= $autoEventId ?>, this)"]`);
@@ -508,5 +496,6 @@ window.addEventListener('DOMContentLoaded', function () {
 <?php endif; ?>
 </script>
 
+<script src="js/checkin-scanner.js?v=<?= filemtime(__DIR__ . '/js/checkin-scanner.js') ?>" defer></script>
 </body>
 </html>

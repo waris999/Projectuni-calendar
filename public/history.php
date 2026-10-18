@@ -1,5 +1,6 @@
 <?php
-session_start();
+require_once __DIR__ . '/../src/security.php';
+/* session initialized by security.php */
 if (!isset($_SESSION['user_id'])) {
     header('Location: index.php');
     exit;
@@ -22,7 +23,7 @@ $history     = $eventModel->getHistoryForUser($_SESSION['user_id']);
 $unreadCount = $notifModel->countUnread($_SESSION['user_id']);
 
 // ชั่วโมงสะสมสำหรับตรวจสอบสิทธิ์ใบเกียรติบัตร
-$currentAY        = (string)(date('Y') + 543);
+$currentAY        = currentAcademicYear();
 $totalHoursForCert = $eventModel->getTotalHours($_SESSION['user_id'], $currentAY);
 
 $goalStmt = $pdo->prepare(
@@ -37,14 +38,14 @@ $requiredForCert = $goal ? (float)$goal['required_hours'] : 0;
 
 $avatarSrc = !empty($_SESSION['profile_image'])
     ? 'img/avatars/' . htmlspecialchars($_SESSION['profile_image'])
-    : 'img/avatar-placeholder.png';
+    : 'img/avatar-placeholder.svg';
 ?>
 <!DOCTYPE html>
 <html lang="th">
 <head>
 <meta charset="UTF-8">
 <title>ประวัติกิจกรรม | Uni Calendar</title>
-<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/style.css?v=<?= filemtime(__DIR__ . '/css/style.css') ?>">
 <style>
     .history-item {
         display: flex;
@@ -109,7 +110,7 @@ $avatarSrc = !empty($_SESSION['profile_image'])
 <aside class="sidebar">
     <div class="profile">
         <a href="profile.php">
-            <img src="<?= $avatarSrc ?>" alt="avatar">
+            <img src="<?= $avatarSrc ?>" alt="รูปโปรไฟล์" onerror="this.onerror=null;this.src='img/avatar-placeholder.svg';">
         </a>
         <div class="name"><?= htmlspecialchars($_SESSION['fullname']) ?></div>
         <div class="role">
@@ -124,7 +125,10 @@ $avatarSrc = !empty($_SESSION['profile_image'])
         <a href="history.php" class="active">🕘 ประวัติกิจกรรม</a>
         <a href="notifications.php">🔔 แจ้งเตือน<?= $unreadCount > 0
             ? ' <span class="nav-badge">' . $unreadCount . '</span>' : '' ?></a>
-        <a href="logout.php">🚪 ออกจากระบบ</a>
+        <form method="POST" action="logout.php" class="logout-form" onsubmit="return confirm('ยืนยันออกจากระบบหรือไม่?');">
+            <?= csrfField() ?>
+            <button type="submit" class="logout-button">🚪 ออกจากระบบ</button>
+        </form>
     </nav>
 </aside>
 

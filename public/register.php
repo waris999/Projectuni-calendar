@@ -1,5 +1,6 @@
 <?php
-session_start();
+require_once __DIR__ . '/../src/security.php';
+/* session initialized by security.php */
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../src/User.php';
 
@@ -17,12 +18,10 @@ function calculateStudentYear(string $studentId): ?int
         return null;
     }
     $admissionYear = 2500 + (int) $prefix;       // เช่น 66 -> 2566
-    $currentYear   = (int) date('Y') + 543;      // แปลงปี ค.ศ. ปัจจุบันเป็น พ.ศ.
+    $currentYear   = (int)currentAcademicYear();      // แปลงปี ค.ศ. ปัจจุบันเป็น พ.ศ.
     $year = $currentYear - $admissionYear + 1;
 
-    if ($year < 1) {
-        $year = 1; // กันกรณีรหัสของปีนี้เอง ให้เริ่มที่ปี 1
-    }
+    if ($year < 1 || $year > 8) return null;
     return $year;
 }
 
@@ -40,6 +39,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'กรุณากรอกข้อมูลให้ครบทุกช่อง';
     } elseif (!preg_match('/^\d{13}$/', $username)) {
         $error = 'รหัสนักศึกษาต้องเป็นตัวเลข 13 หลักเท่านั้น';
+    } elseif (calculateStudentYear($username) === null) {
+        $error = 'รหัสนักศึกษาไม่ตรงกับรุ่นที่รับ';
     } elseif (strlen($password) < 6) {
         $error = 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร';
     } elseif ($password !== $confirmPassword) {
@@ -63,7 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
 <meta charset="UTF-8">
 <title>สมัครสมาชิก | Uni Calendar</title>
-<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/style.css?v=<?= filemtime(__DIR__ . '/css/style.css') ?>">
 <style>
     body.auth-page {
         display: flex;
@@ -154,6 +155,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <?php endif; ?>
 
         <form method="POST" action="register.php">
+<?= csrfField() ?>
             <label for="fullname">ชื่อ-นามสกุล</label>
             <input type="text" id="fullname" name="fullname"
                 value="<?= htmlspecialchars($_POST['fullname'] ?? '') ?>" required>

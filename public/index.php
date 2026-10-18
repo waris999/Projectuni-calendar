@@ -1,6 +1,7 @@
 <?php
+require_once __DIR__ . '/../src/security.php';
 if (session_status() === PHP_SESSION_NONE) {
-    session_start();
+    /* session initialized by security.php */
 }
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../src/User.php';
@@ -30,6 +31,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form_type'] ?? '') === 'lo
         } elseif ($result === 'invalid') {
             $loginError = 'Username หรือรหัสผ่านไม่ถูกต้อง';
         } elseif (is_array($result)) {
+            session_regenerate_id(true);
             $_SESSION['user_id']       = $result['id'];
             $_SESSION['username']      = $result['username'];
             $_SESSION['fullname']      = $result['fullname'];
@@ -54,7 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form_type'] ?? '') === 're
     // คำนวณชั้นปีอัตโนมัติจาก 2 ตัวแรกของรหัสนักศึกษา
     // รหัสปี พ.ศ. สั้น: 66=ปี4, 67=ปี3, 68=ปี2, 69=ปี1 (ปีปัจจุบัน 2569)
     // รับชั้นปีที่ 1-8 (กรณีเรียนเกินกำหนด)
-    $currentShortYear = (int)((date('Y') + 543) % 100); // เช่น 2569 → 69
+    $currentShortYear = (int)currentAcademicYear() % 100; // เช่น 2569 → 69
     $entryShortYear   = strlen($username) >= 2 ? (int)substr($username, 0, 2) : 0;
     $studentYear      = $currentShortYear - $entryShortYear + 1;
     if ($studentYear < 1 || $studentYear > 8) {
@@ -66,7 +68,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form_type'] ?? '') === 're
     } elseif (strlen($username) !== 13 || !ctype_digit($username)) {
         $registerError = 'รหัสนักศึกษาต้องเป็นตัวเลข 13 หลัก';
     } elseif ($studentYear < 1 || $studentYear > 8) {
-        $registerError = 'รหัสนักศึกษาไม่ตรงกับปีการศึกษาปัจจุบัน (รับรุ่น 62-69 เท่านั้น)';
+        $registerError = 'รหัสนักศึกษาไม่ตรงกับปีการศึกษาปัจจุบัน (รับรุ่นย้อนหลังไม่เกิน 8 ปี)';
     } elseif (strlen($password) < 6) {
         $registerError = 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร';
     } elseif ($password !== $confirmPassword) {
@@ -337,6 +339,7 @@ justify-content: center; gap: 6px;
         <div class="alert alert-error"><?= htmlspecialchars($loginError) ?></div>
         <?php endif; ?>
         <form method="POST">
+<?= csrfField() ?>
         <input type="hidden" name="form_type" value="login">
         <div class="field">
             <label for="login_user">รหัสนักศึกษา / Username</label>
@@ -369,6 +372,7 @@ justify-content: center; gap: 6px;
         <div class="alert alert-success">✓ สมัครสมาชิกสำเร็จแล้ว! เข้าสู่ระบบได้เลย</div>
         <?php endif; ?>
         <form method="POST">
+<?= csrfField() ?>
         <input type="hidden" name="form_type" value="register">
         <div class="field">
             <label for="reg_name">ชื่อ-นามสกุล</label>
@@ -403,7 +407,7 @@ justify-content: center; gap: 6px;
 </div>
 
 <script>
-const CURRENT_SHORT_YEAR = <?= (int)((date('Y') + 543) % 100) ?>; // เช่น 69
+const CURRENT_SHORT_YEAR = <?= (int)currentAcademicYear() % 100 ?>; // เช่น 69
 
 function detectYear(val) {
     const badge = document.getElementById('year-badge');
@@ -415,7 +419,7 @@ function detectYear(val) {
     } else if (year >= 5 && year <= 8) {
         badge.innerHTML = `<span style="display:inline-flex;align-items:center;gap:6px;background:#fff8e1;color:#b7791f;padding:4px 12px;border-radius:20px;font-weight:500;">📚 ชั้นปีที่ ${year} (เรียนต่อเนื่อง)</span>`;
     } else {
-        badge.innerHTML = `<span style="display:inline-flex;align-items:center;gap:6px;background:#fef2f1;color:#c0392b;padding:4px 12px;border-radius:20px;">⚠️ รหัสปี ${entry} ไม่อยู่ในรุ่น 62–69</span>`;
+        badge.innerHTML = `<span style="display:inline-flex;align-items:center;gap:6px;background:#fef2f1;color:#c0392b;padding:4px 12px;border-radius:20px;">⚠️ รหัสปี ${entry} ไม่อยู่ในรุ่นที่เปิดรับ</span>`;
     }
 }
 

@@ -1,5 +1,6 @@
 <?php
-session_start();
+require_once __DIR__ . '/../src/security.php';
+/* session initialized by security.php */
 if (!isset($_SESSION['user_id'])) {
     header('Location: index.php');
     exit;
@@ -15,7 +16,7 @@ $eventModel = new Event($pdo);
 $myEvents = $eventModel->getRegisteredByUser($_SESSION['user_id']);
 
 // ชั่วโมงสะสม (เฉพาะ student)
-$currentAcademicYear = (string)(date('Y') + 543);
+$currentAcademicYear = currentAcademicYear();
 $totalHours = 0;
 $requiredHours = 0;
 if (!$isAdmin) {
@@ -31,21 +32,21 @@ $unreadCount = $isAdmin ? 0 : $notifModel->countUnread($_SESSION['user_id']);
 
 $avatarSrc = !empty($_SESSION['profile_image'])
     ? 'img/avatars/' . htmlspecialchars($_SESSION['profile_image'])
-    : 'img/avatar-placeholder.png';
+    : 'img/avatar-placeholder.svg';
 ?>
 <!DOCTYPE html>
 <html lang="th">
 <head>
 <meta charset="UTF-8">
 <title>หน้าหลัก | Uni Calendar</title>
-<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/style.css?v=<?= filemtime(__DIR__ . '/css/style.css') ?>">
 </head>
 <body class="app-layout">
 
 <aside class="sidebar">
     <div class="profile">
         <a href="profile.php">
-            <img src="<?= $avatarSrc ?>" alt="avatar">
+            <img src="<?= $avatarSrc ?>" alt="รูปโปรไฟล์" onerror="this.onerror=null;this.src='img/avatar-placeholder.svg';">
         </a>
         <div class="name"><?= htmlspecialchars($_SESSION['fullname']) ?></div>
         <div class="role">
@@ -68,7 +69,10 @@ $avatarSrc = !empty($_SESSION['profile_image'])
             <a href="history.php">🕘 ประวัติกิจกรรม</a>
         <?php endif; ?>
         <a href="notifications.php">🔔 แจ้งเตือน<?= $unreadCount > 0 ? ' <span class="nav-badge">' . $unreadCount . '</span>' : '' ?></a>
-        <a href="logout.php">🚪 ออกจากระบบ</a>
+        <form method="POST" action="logout.php" class="logout-form" onsubmit="return confirm('ยืนยันออกจากระบบหรือไม่?');">
+            <?= csrfField() ?>
+            <button type="submit" class="logout-button">🚪 ออกจากระบบ</button>
+        </form>
     </nav>
 </aside>
 
@@ -103,9 +107,9 @@ $avatarSrc = !empty($_SESSION['profile_image'])
                         <div style="font-size:12px; color:#666; margin-top:6px;">
                 <?php if ($percent >= 100): ?>
                     ✅ ครบตามเกณฑ์แล้ว!
-                    <a href="generate_cert.php" class="btn"
+                    <a href="my_cert.php?ay=<?= htmlspecialchars($currentAcademicYear, ENT_QUOTES, 'UTF-8') ?>" class="btn"
                     style="display:inline-block; margin-top:10px; font-size:13px;">
-                        📄 ดาวน์โหลดใบเกียรติบัตร
+                        📄 ดู / พิมพ์ใบรับรอง
                     </a>
                 <?php else: ?>
                     ต้องการอีก <?= max(0, $requiredHours - $totalHours) ?> ชั่วโมง

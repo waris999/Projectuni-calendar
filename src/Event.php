@@ -24,16 +24,17 @@ class Event
         $stmt = $this->pdo->prepare(
             "SELECT e.*,
                     (SELECT COUNT(*) FROM registrations r
-                    WHERE r.event_id = e.id AND r.user_id = :user_id AND r.status = 'registered') AS is_registered,
+                    WHERE r.event_id = e.id AND r.user_id = :user_id AND r.status IN ('registered','attended')) AS is_registered,
+                    (SELECT COUNT(*) FROM registrations ra WHERE ra.event_id = e.id AND ra.user_id = :attendance_user_id AND ra.status = 'attended') AS is_attended,
                     (SELECT COUNT(*) FROM registrations r2
-                    WHERE r2.event_id = e.id AND r2.status = 'registered') AS registered_count
+                    WHERE r2.event_id = e.id AND r2.status IN ('registered','attended')) AS registered_count
             FROM events e
             ORDER BY e.start_datetime ASC"
         );
-        $stmt->execute(['user_id' => $userId]);
+        $stmt->execute(['user_id' => $userId, 'attendance_user_id' => $userId]);
         return $stmt->fetchAll();
     }
-    
+
 
     // ดึงกิจกรรมเดียวจาก id
     public function findById(int $id): array|false
@@ -125,17 +126,19 @@ class Event
         // ดึงชั่วโมงสะสมรวมของ user คนหนึ่งในปีการศึกษาที่กำหนด
     public function getTotalHours(int $userId, string $academicYear): float
     {
+        [$ayStart, $ayEnd] = academicYearRange($academicYear);
         $stmt = $this->pdo->prepare(
             "SELECT COALESCE(SUM(e.activity_hours), 0) AS total
             FROM registrations r
             INNER JOIN events e ON e.id = r.event_id
             WHERE r.user_id = :user_id
             AND r.status = 'attended'
-            AND YEAR(e.start_datetime) + 543 = :academic_year"
+            AND e.start_datetime >= :ay_start AND e.start_datetime < :ay_end"
         );
         $stmt->execute([
             'user_id'       => $userId,
-            'academic_year' => $academicYear,
+            'ay_start' => $ayStart,
+            'ay_end' => $ayEnd,
         ]);
         return (float) $stmt->fetch()['total'];
     }
@@ -143,20 +146,21 @@ class Event
     // ดึงสรุปชั่วโมงรายคน ทุก student (สำหรับหน้า admin)
     public function getHoursSummaryAll(string $academicYear): array
     {
+        [$ayStart, $ayEnd] = academicYearRange($academicYear);
         $stmt = $this->pdo->prepare(
             "SELECT
                 u.id, u.fullname, u.username, u.student_year,
                 COALESCE(SUM(e.activity_hours), 0) AS total_hours,
-                COUNT(r.id) AS attended_count
+                COUNT(e.id) AS attended_count
             FROM users u
             LEFT JOIN registrations r ON r.user_id = u.id AND r.status = 'attended'
             LEFT JOIN events e ON e.id = r.event_id
-            AND YEAR(e.start_datetime) + 543 = :academic_year
+            AND e.start_datetime >= :ay_start AND e.start_datetime < :ay_end
             WHERE u.role = 'student'
             GROUP BY u.id
             ORDER BY u.student_year ASC, total_hours DESC"
         );
-        $stmt->execute(['academic_year' => $academicYear]);
+        $stmt->execute(['ay_start' => $ayStart, 'ay_end' => $ayEnd]);
         return $stmt->fetchAll();
     }
         // ยอดลงทะเบียน vs เช็คอินจริง แยกตามกิจกรรม (5 อันล่าสุด)

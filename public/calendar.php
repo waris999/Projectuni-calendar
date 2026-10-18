@@ -1,5 +1,6 @@
 <?php
-session_start();
+require_once __DIR__ . '/../src/security.php';
+/* session initialized by security.php */
 if (!isset($_SESSION['user_id'])) {
     header('Location: index.php');
     exit;
@@ -13,14 +14,14 @@ $unreadCount = $isAdmin ? 0 : $notifModel->countUnread($_SESSION['user_id']);
 
 $avatarSrc = !empty($_SESSION['profile_image'])
     ? 'img/avatars/' . htmlspecialchars($_SESSION['profile_image'])
-    : 'img/avatar-placeholder.png';
+    : 'img/avatar-placeholder.svg';
 ?>
 <!DOCTYPE html>
 <html lang="th">
 <head>
 <meta charset="UTF-8">
 <title>ปฏิทินกิจกรรม | Uni Calendar</title>
-<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/style.css?v=<?= filemtime(__DIR__ . '/css/style.css') ?>">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/6.1.10/index.global.min.css" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/6.1.10/index.global.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -281,7 +282,7 @@ $avatarSrc = !empty($_SESSION['profile_image'])
 <aside class="sidebar">
     <div class="profile">
         <a href="profile.php">
-            <img src="<?= $avatarSrc ?>" alt="avatar">
+            <img src="<?= $avatarSrc ?>" alt="รูปโปรไฟล์" onerror="this.onerror=null;this.src='img/avatar-placeholder.svg';">
         </a>
         <div class="name"><?= htmlspecialchars($_SESSION['fullname']) ?></div>
         <div class="role">
@@ -304,7 +305,10 @@ $avatarSrc = !empty($_SESSION['profile_image'])
         <a href="history.php">🕘 ประวัติกิจกรรม</a>
         <?php endif; ?>
         <a href="notifications.php">🔔 แจ้งเตือน<?= $unreadCount > 0 ? ' <span class="nav-badge">' . $unreadCount . '</span>' : '' ?></a>
-        <a href="logout.php">🚪 ออกจากระบบ</a>
+        <form method="POST" action="logout.php" class="logout-form" onsubmit="return confirm('ยืนยันออกจากระบบหรือไม่?');">
+            <?= csrfField() ?>
+            <button type="submit" class="logout-button">🚪 ออกจากระบบ</button>
+        </form>
     </nav>
 </aside>
 
@@ -559,16 +563,17 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             const now = new Date();
-            const isPast = end && end < now;
+            const isPast = start && start <= now;
 
             // Build meta
             const metaEl = document.getElementById('evMeta');
+            const escapeHtml = value => { const el = document.createElement('span'); el.textContent = String(value); return el.innerHTML; };
             metaEl.innerHTML = [
                 `<div class="ev-meta-row"><span class="icon">🕒</span><span>${fmt(start)} — ${fmt(end)}</span></div>`,
-                `<div class="ev-meta-row"><span class="icon">📍</span><span>${loc}</span></div>`,
+                `<div class="ev-meta-row"><span class="icon">📍</span><span>${escapeHtml(loc)}</span></div>`,
                 hours > 0 ? `<div class="ev-meta-row"><span class="icon">⏱️</span><span><strong>${hours} ชั่วโมง</strong></span></div>` : '',
                 `<div class="ev-meta-row"><span class="icon">👥</span><span>${seatText}</span></div>`,
-                `<div class="ev-meta-row"><span class="icon">🎓</span><span>${yearText}</span></div>`,
+                `<div class="ev-meta-row"><span class="icon">🎓</span><span>${escapeHtml(yearText)}</span></div>`,
             ].join('');
 
             // Description
@@ -586,6 +591,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             if (!isAdmin) {
                 currentRegistered = !!info.event.extendedProps.registered;
+                currentAttended = !!info.event.extendedProps.attended;
                 currentIsFull = isFull;
                 currentIsYearAllowed = isYearAllowed;
                 currentIsPast = isPast;
@@ -600,9 +606,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 codeBadge.innerHTML = '';
                 if (code) {
                     qrSection.style.display = '';
-                    codeBadge.innerHTML = `<div class="checkin-code-badge">${code}</div>`;
+                    codeBadge.innerHTML = `<div class="checkin-code-badge">${escapeHtml(code)}</div>`;
                     new QRCode(qrWrap, {
-                        text: `${window.location.origin}/uni-calendar/public/checkin.php?auto_event=${currentEventId}&auto_code=${code}`,
+                        text: new URL(`checkin.php?auto_event=${encodeURIComponent(currentEventId)}&auto_code=${encodeURIComponent(code)}`, window.location.href).href,
                         width: 140, height: 140
                     });
                 } else {
@@ -641,12 +647,14 @@ function applyCalendarFilters() {
     calendar.refetchEvents();
 }
 
+let currentAttended = false;
 function updateRegisterButton() {
     const btn = document.getElementById('registerBtn');
     // reset style
     btn.className = 'btn-primary-modal';
     btn.disabled = false;
-    if (currentIsPast && !currentRegistered) {
+    if (currentAttended) { btn.textContent = 'เช็คอินแล้ว'; btn.disabled = true; return; }
+    if (currentIsPast) {
         btn.textContent = 'กิจกรรมนี้ผ่านไปแล้ว';
         btn.style.background = '#e0e0e0'; btn.style.color = '#999'; btn.style.cursor = 'not-allowed';
         btn.disabled = true;
@@ -676,7 +684,7 @@ async function toggleRegister() {
     try {
         const res = await fetch('api/register_event.php', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': <?= json_encode($_SESSION['csrf_token']) ?> },
             body: JSON.stringify({ event_id: currentEventId, action: action })
         });
         const result = await res.json();
@@ -688,6 +696,9 @@ async function toggleRegister() {
             calendar.refetchEvents();
         } else if (result.error === 'full') {
             msgEl.textContent = 'ขออภัย ที่นั่งเต็มแล้ว';
+            calendar.refetchEvents();
+        } else if (result.error === 'already_checked_in') {
+            msgEl.textContent = 'เช็คอินแล้ว ไม่สามารถเปลี่ยนการลงทะเบียนได้';
             calendar.refetchEvents();
         } else if (result.error === 'year_not_allowed') {
             msgEl.textContent = 'กิจกรรมนี้ไม่เปิดให้ชั้นปีของคุณลงทะเบียน';
@@ -742,7 +753,7 @@ async function submitCreateEvent() {
 
     const res = await fetch('api/manage_event.php', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': <?= json_encode($_SESSION['csrf_token']) ?> },
         body: JSON.stringify({
             action:           'create',
             title:            title,
@@ -776,7 +787,7 @@ async function openEditModal(eventId) {
     // ดึงข้อมูล event เดิมมาเติมฟอร์ม
     const res = await fetch('api/manage_event.php', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': <?= json_encode($_SESSION['csrf_token']) ?> },
         body: JSON.stringify({ action: 'get', event_id: eventId })
     });
     const result = await res.json();
@@ -827,7 +838,7 @@ async function submitEditEvent() {
 
     const res = await fetch('api/manage_event.php', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': <?= json_encode($_SESSION['csrf_token']) ?> },
         body: JSON.stringify({
             action:          'edit',
             event_id:        eventId,

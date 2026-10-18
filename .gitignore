@@ -1,0 +1,20 @@
+# Local configuration and credentials
+/config/mail.local.php
+/.env
+/.env.*
+!/.env.example
+/.vscode/
+
+# Runtime uploads and generated certificates
+/public/img/avatars/*
+!/public/img/avatars/.gitkeep
+/public/img/event_photos/*
+!/public/img/event_photos/.gitkeep
+/public/certificates/*
+!/public/certificates/.gitkeep
+*.log
+*.bak
+
+# Local dependency installations
+/vendor/
+/node_modules/

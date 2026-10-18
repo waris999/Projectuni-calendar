@@ -1,0 +1,8 @@
+Options -Indexes
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^(?:\.git|config|src|vendor)(?:/|$) - [F,L,NC]
+</IfModule>
+<FilesMatch "(?i)^(?:\.env.*|composer\.(json|lock)|.*\.(sql|bak|log|ini))$">
+    Require all denied
+</FilesMatch>

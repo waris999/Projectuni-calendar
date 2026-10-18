@@ -1,5 +1,6 @@
 <?php
-session_start();
+require_once __DIR__ . '/../src/security.php';
+/* session initialized by security.php */
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
     header('Location: index.php');
     exit;
@@ -22,8 +23,8 @@ if (!$student) {
 }
 
 // ปีการศึกษาปัจจุบัน
-$currentAY = (string)(date('Y') + 543);
-$selectedAY = $_GET['ay'] ?? $currentAY;
+$currentAY = currentAcademicYear();
+$selectedAY = requestedAcademicYear();
 
 // ดึงชั่วโมงสะสม
 $eventModel = new Event($pdo);
@@ -36,10 +37,11 @@ $evStmt = $pdo->prepare(
     INNER JOIN events e ON e.id = r.event_id
     WHERE r.user_id = :uid
     AND r.status = 'attended'
-    AND YEAR(e.start_datetime) + 543 = :ay
+    AND e.start_datetime >= :ay_start AND e.start_datetime < :ay_end
     ORDER BY e.start_datetime ASC"
 );
-$evStmt->execute(['uid' => $targetUserId, 'ay' => $selectedAY]);
+[$ayStart, $ayEnd] = academicYearRange($selectedAY);
+$evStmt->execute(['uid' => $targetUserId, 'ay_start' => $ayStart, 'ay_end' => $ayEnd]);
 $activities = $evStmt->fetchAll();
 
 // ดึงเป้าหมาย
@@ -246,11 +248,12 @@ body {
     }
 }
 </style>
+<link rel="stylesheet" href="css/certificate-print.css?v=<?= filemtime(__DIR__ . '/css/certificate-print.css') ?>">
 </head>
 <body>
 
 <div class="print-btn-bar">
-    <button class="btn-print" onclick="window.print()">🖨️ พิมพ์ / บันทึก PDF</button>
+    <button class="btn-print" onclick="document.fonts.ready.then(() => window.print())">🖨️ พิมพ์ / บันทึก PDF</button>
     <button class="btn-back" onclick="history.back()">← กลับ</button>
 </div>
 

@@ -1,5 +1,6 @@
 <?php
-session_start();
+require_once __DIR__ . '/../src/security.php';
+/* session initialized by security.php */
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../src/User.php';
 
@@ -30,7 +31,8 @@ if ($result === 'locked') {
 }
 
 // login สำเร็จ ($result เป็น array ข้อมูล user)
-$_SESSION['user_id']       = $result['id'];
+session_regenerate_id(true);
+            $_SESSION['user_id']       = $result['id'];
 $_SESSION['username']      = $result['username'];
 $_SESSION['fullname']      = $result['fullname'];
 $_SESSION['role']          = $result['role'];

@@ -1,0 +1,18 @@
+@page { size: A4 portrait; margin: 12mm; }
+@media print {
+    html, body { width: auto !important; height: auto !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; background: #fff !important; }
+    body { display: block !important; font-family: 'Sarabun', 'Tahoma', 'Leelawadee UI', sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .print-btn-bar { display: none !important; }
+    .cert { box-sizing: border-box; width: 100% !important; max-width: none !important; margin: 0 !important; padding: 10mm 9mm !important; box-shadow: none !important; border-radius: 0 !important; break-inside: auto; }
+    .cert-header, .cert-body, .cert-footer { break-inside: avoid; page-break-inside: avoid; }
+    .cert-body .student-name { font-size: 25pt; overflow-wrap: anywhere; }
+    .activity-table { table-layout: fixed; overflow-wrap: anywhere; }
+    .activity-table thead { display: table-header-group; }
+    .activity-table tr { break-inside: avoid; page-break-inside: avoid; }
+    .activity-table th:first-child { width: 7%; }
+    .activity-table th:nth-child(3) { width: 20%; }
+    .activity-table th:last-child { width: 17%; }
+    .cert-footer { gap: 5mm; }
+    .cert-footer .sign-block { width: 30%; }
+    .cert-footer .issued-info { flex: 1; }
+}

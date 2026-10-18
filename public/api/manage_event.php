@@ -1,5 +1,6 @@
 <?php
-session_start();
+require_once __DIR__ . '/../../src/security.php';
+/* session initialized by security.php */
 header('Content-Type: application/json; charset=utf-8');
 
 require_once __DIR__ . '/../../config/database.php';
@@ -14,8 +15,32 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
 
 $eventModel = new Event($pdo);
 $notifModel = new Notification($pdo);
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') { http_response_code(405); header('Allow: POST'); exit(json_encode(['error'=>'method_not_allowed'])); }
 $data = json_decode(file_get_contents('php://input'), true);
 $action = $data['action'] ?? '';
+if (in_array($action, ['create','edit'], true)) {
+    $valid = is_array($data);
+    foreach (['title','description','location','start_datetime','end_datetime','checkin_code'] as $field) {
+        if (isset($data[$field]) && !is_string($data[$field])) $valid = false;
+    }
+    if (!$valid) { http_response_code(400); exit(json_encode(['error'=>'invalid_fields'])); }
+    $startDate = DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $data['start_datetime'] ?? '');
+    $endDate = DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $data['end_datetime'] ?? '');
+    $max = $data['max_participants'] ?? '';
+    $hours = $data['activity_hours'] ?? 0;
+    $years = $data['target_years'] ?? [];
+    $code = trim($data['checkin_code'] ?? '');
+    $length = static fn(string $s): int => preg_match_all('/./us', $s);
+    if (!$startDate || !$endDate || $startDate->format('Y-m-d H:i:s') !== ($data['start_datetime'] ?? '') || $endDate->format('Y-m-d H:i:s') !== ($data['end_datetime'] ?? '') || $endDate <= $startDate
+        || $length(trim($data['title'] ?? '')) < 1 || $length($data['title']) > 150 || $length($data['location'] ?? '') > 150
+        || ($max !== '' && $max !== null && filter_var($max, FILTER_VALIDATE_INT, ['options'=>['min_range'=>1, 'max_range'=>2147483647]]) === false)
+        || !is_numeric($hours) || !is_finite((float)$hours) || (float)$hours < 0 || (float)$hours > 999.9
+        || !is_array($years) || count($years) > 8 || array_filter($years, static fn($v) => !is_scalar($v) || !preg_match('/^[1-8]$/D', (string)$v))
+        || ($code !== '' && !preg_match('/^[A-Za-z0-9]{1,10}$/D', $code))) {
+        http_response_code(400); exit(json_encode(['error'=>'invalid_fields']));
+    }
+}
+
 
 // ---- GET: ดึงข้อมูล event เดิมมาเติมฟอร์มแก้ไข ----
 if ($action === 'get') {
