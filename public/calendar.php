@@ -277,6 +277,8 @@ $avatarSrc = !empty($_SESSION['profile_image'])
         margin-bottom: 12px;
     }
 </style>
+<link rel="stylesheet" href="css/calendar-responsive.css?v=<?= filemtime(__DIR__ . '/css/calendar-responsive.css') ?>">
+<script src="js/calendar-responsive.js?v=<?= filemtime(__DIR__ . '/js/calendar-responsive.js') ?>"></script>
 </head>
 <body class="app-layout">
 
@@ -324,7 +326,7 @@ $avatarSrc = !empty($_SESSION['profile_image'])
         <?php endif; ?>
 
         <div class="calendar-filters">
-            <input type="text" id="searchEventInput" placeholder="🔍 ค้นหาชื่อกิจกรรม...">
+            <input type="text" id="searchEventInput" placeholder="ค้นหาชื่อกิจกรรม...">
             <?php if (!$isAdmin): ?>
             <select id="filterRegistered">
                 <option value="all">ทั้งหมด</option>
@@ -514,14 +516,9 @@ let calendarFilterValue = 'all';
 document.addEventListener('DOMContentLoaded', function () {
     const calendarEl = document.getElementById('calendar');
     calendar = new FullCalendar.Calendar(calendarEl, {
-        initialView: 'dayGridMonth',
+        ...createResponsiveCalendarOptions(),
         locale: 'th',
         height: 'auto',
-        headerToolbar: {
-            left: 'prev,next today',
-            center: 'title',
-            right: 'dayGridMonth,timeGridWeek,listWeek'
-        },
         events: function(fetchInfo, successCallback, failureCallback) {
             const params = new URLSearchParams();
             if (calendarSearchText) params.set('search', calendarSearchText);

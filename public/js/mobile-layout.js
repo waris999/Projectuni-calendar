@@ -39,7 +39,7 @@
     media.addEventListener('change', () => setOpen(false));
     setOpen(false);
     document.querySelectorAll('.main table').forEach(table => {
-        if (table.closest('.hours-table-scroll, .mobile-table-scroll')) return;
+        if (table.closest('.fc, .hours-table-scroll, .mobile-table-scroll')) return;
         const wrapper = document.createElement('div');
         wrapper.className = 'mobile-table-scroll';
         wrapper.tabIndex = 0;

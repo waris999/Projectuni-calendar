@@ -53,6 +53,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form_type'] ?? '') === 're
     $password        = $_POST['password'] ?? '';
     $confirmPassword = $_POST['confirm_password'] ?? '';
     $fullname        = trim($_POST['fullname'] ?? '');
+    $nameTitle = is_string($_POST['name_title'] ?? null) ? $_POST['name_title'] : '';
 
     // คำนวณชั้นปีอัตโนมัติจาก 2 ตัวแรกของรหัสนักศึกษา
     // รหัสปี พ.ศ. สั้น: 66=ปี4, 67=ปี3, 68=ปี2, 69=ปี1 (ปีปัจจุบัน 2569)
@@ -64,7 +65,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form_type'] ?? '') === 're
         $studentYear = 0; // รหัสไม่ตรงกับรุ่นที่รับ
     }
 
-    if ($username === '' || $password === '' || $fullname === '') {
+    if (!in_array($nameTitle, ['นาย', 'นางสาว', 'นาง'], true)) {
+        $registerError = 'กรุณาเลือกคำนำหน้าชื่อ';
+    } elseif ($username === '' || $password === '' || $fullname === '') {
         $registerError = 'กรุณากรอกข้อมูลให้ครบทุกช่อง';
     } elseif (strlen($username) !== 13 || !ctype_digit($username)) {
         $registerError = 'รหัสนักศึกษาต้องเป็นตัวเลข 13 หลัก';
@@ -78,7 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form_type'] ?? '') === 're
         $userModel = new User($pdo);
         $ok = false;
         try {
-            $ok = registerStudentWithAvatar($userModel, $pdo, $username, $password, $fullname, $studentYear, $_FILES['avatar'] ?? null);
+            $ok = registerStudentWithAvatar($userModel, $pdo, $username, $password, $nameTitle . $fullname, $studentYear, $_FILES['avatar'] ?? null);
         } catch (InvalidArgumentException $e) {
             $registerError = $e->getMessage();
         } catch (Throwable $e) {
@@ -385,10 +388,19 @@ justify-content: center; gap: 6px;
 <?= csrfField() ?>
         <input type="hidden" name="form_type" value="register">
         <?php require __DIR__ . '/../src/registration-avatar-field.php'; ?>
+<div class="field">
+            <label for="name-title">คำนำหน้าชื่อ</label>
+            <select id="name-title" name="name_title" required>
+                <option value="">เลือกคำนำหน้าชื่อ</option>
+                <?php foreach (['นาย', 'นางสาว', 'นาง'] as $title): ?>
+                <option value="<?= $title ?>" <?= ($_POST['name_title'] ?? '') === $title ? 'selected' : '' ?>><?= $title ?></option>
+                <?php endforeach; ?>
+            </select>
+        </div>
         <div class="field">
-            <label for="reg_name">ชื่อ-นามสกุล</label>
+            <label for="reg_name">ชื่อ-นามสกุล (ไม่ต้องใส่คำนำหน้า)</label>
             <input type="text" id="reg_name" name="fullname" required
-                placeholder="เช่น นาย สมชาย ใจดี"
+                placeholder="เช่น สมชาย ใจดี"
                 value="<?= htmlspecialchars($_POST['fullname'] ?? '') ?>">
         </div>
         <div class="field">

@@ -34,9 +34,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $password        = $_POST['password'] ?? '';
     $confirmPassword = $_POST['confirm_password'] ?? '';
     $fullname        = trim($_POST['fullname'] ?? '');
+    $nameTitle = is_string($_POST['name_title'] ?? null) ? $_POST['name_title'] : '';
     $role            = 'student'; // บังคับให้สมัครเป็นนักศึกษาเท่านั้น admin ต้องสร้างผ่าน phpMyAdmin
 
-    if ($username === '' || $password === '' || $fullname === '') {
+    if (!in_array($nameTitle, ['นาย', 'นางสาว', 'นาง'], true)) {
+        $error = 'กรุณาเลือกคำนำหน้าชื่อ';
+    } elseif ($username === '' || $password === '' || $fullname === '') {
         $error = 'กรุณากรอกข้อมูลให้ครบทุกช่อง';
     } elseif (!preg_match('/^\d{13}$/', $username)) {
         $error = 'รหัสนักศึกษาต้องเป็นตัวเลข 13 หลักเท่านั้น';
@@ -52,7 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $userModel = new User($pdo);
         $ok = false;
         try {
-            $ok = registerStudentWithAvatar($userModel, $pdo, $username, $password, $fullname, $studentYear, $_FILES['avatar'] ?? null);
+            $ok = registerStudentWithAvatar($userModel, $pdo, $username, $password, $nameTitle . $fullname, $studentYear, $_FILES['avatar'] ?? null);
         } catch (InvalidArgumentException $e) {
             $error = $e->getMessage();
         } catch (Throwable $e) {
@@ -168,7 +171,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <form method="POST" action="register.php" enctype="multipart/form-data">
 <?= csrfField() ?>
 <?php require __DIR__ . '/../src/registration-avatar-field.php'; ?>
-            <label for="fullname">ชื่อ-นามสกุล</label>
+<div class="field">
+            <label for="name-title">คำนำหน้าชื่อ</label>
+            <select id="name-title" name="name_title" required>
+                <option value="">เลือกคำนำหน้าชื่อ</option>
+                <?php foreach (['นาย', 'นางสาว', 'นาง'] as $title): ?>
+                <option value="<?= $title ?>" <?= ($_POST['name_title'] ?? '') === $title ? 'selected' : '' ?>><?= $title ?></option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+            <label for="fullname">ชื่อ-นามสกุล (ไม่ต้องใส่คำนำหน้า)</label>
             <input type="text" id="fullname" name="fullname"
                 value="<?= htmlspecialchars($_POST['fullname'] ?? '') ?>" required>
             <div class="field-hint">&nbsp;</div>

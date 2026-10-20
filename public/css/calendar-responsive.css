@@ -1,0 +1,28 @@
+/* FullCalendar owns its internal tables; keep mobile controls separate. */
+@media screen and (max-width: 767px) {
+    #calendar { padding: 16px 12px; border-radius: 12px; }
+    #calendar .fc-header-toolbar { display: grid; grid-template-columns: 1fr; gap: 12px; margin-bottom: 18px; }
+    #calendar .fc-toolbar-chunk { display: flex; align-items: center; justify-content: center; min-width: 0; }
+    #calendar .fc-toolbar-chunk:nth-child(2) { grid-row: 1; }
+    #calendar .fc-toolbar-title { font-size: 19px !important; line-height: 1.4; text-align: center; white-space: normal; }
+    #calendar .fc-button { min-height: 42px; padding: 8px 14px; font-family: inherit; font-size: 13px !important; }
+    #calendar .fc-button-group { gap: 4px; }
+    #calendar .fc-button-group > .fc-button { margin-left: 0; }
+    #calendar .fc-toolbar-chunk > .fc-button { margin-left: 8px; }
+    #calendar .fc-col-header-cell-cushion { font-size: 12px; padding: 10px 0; }
+    #calendar .fc-daygrid-day-number { font-size: 13px; padding: 6px; }
+    #calendar .fc-daygrid-day-frame { min-height: 56px; }
+    #calendar .fc-daygrid-event { padding: 2px !important; font-size: 11px !important; }
+    #calendar .fc-daygrid-event .fc-event-time { display: none; }
+    #calendar .fc-daygrid-event .fc-event-title { overflow: hidden; text-overflow: ellipsis; }
+    #calendar .fc-list { border: 1px solid #e0e9e3; border-radius: 8px; overflow: hidden; }
+    #calendar .fc-list-day-cushion { background: #edf5ef; padding: 10px; font-size: 13px; }
+    #calendar .fc-list-day-text, #calendar .fc-list-day-side-text { white-space: normal; }
+    #calendar .fc-list-event td { padding: 12px 8px; font-size: 13px; }
+    #calendar .fc-list-event-title { overflow-wrap: anywhere; }
+    #calendar .fc-list-event-time { white-space: normal; width: 65px; }
+    #calendar .fc-list-empty { padding: 24px 12px; color: #66736b; background: #f7faf8; }
+    .calendar-filters { gap: 10px; }
+    .calendar-filters input { flex: 1 1 100%; width: 100%; min-width: 0; min-height: 44px; }
+    .calendar-filters select { flex: 1 1 100%; width: 100%; min-height: 44px; }
+}
