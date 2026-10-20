@@ -3,6 +3,7 @@ require_once __DIR__ . '/../src/security.php';
 /* session initialized by security.php */
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../src/User.php';
+require_once __DIR__ . '/../src/RegistrationAvatar.php';
 
 // ถ้า login อยู่แล้ว ไม่ต้องมาหน้าสมัครอีก
 if (isset($_SESSION['user_id'])) {
@@ -49,12 +50,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $studentYear = calculateStudentYear($username);
 
         $userModel = new User($pdo);
-        $ok = $userModel->register($username, $password, $fullname, $role, $studentYear);
+        $ok = false;
+        try {
+            $ok = registerStudentWithAvatar($userModel, $pdo, $username, $password, $fullname, $studentYear, $_FILES['avatar'] ?? null);
+        } catch (InvalidArgumentException $e) {
+            $error = $e->getMessage();
+        } catch (Throwable $e) {
+            error_log('Registration with avatar failed');
+            $error = 'สมัครสมาชิกไม่สำเร็จ กรุณาลองใหม่';
+        }
 
         if ($ok) {
             $success = true;
         } else {
-            $error = 'รหัสนักศึกษานี้ถูกใช้งานแล้ว';
+            if ($error === '') $error = 'รหัสนักศึกษานี้ถูกใช้งานแล้ว';
         }
     }
 }
@@ -62,6 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <!DOCTYPE html>
 <html lang="th">
 <head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <meta charset="UTF-8">
 <title>สมัครสมาชิก | Uni Calendar</title>
 <link rel="stylesheet" href="css/style.css?v=<?= filemtime(__DIR__ . '/css/style.css') ?>">
@@ -77,7 +87,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         background: #fff;
         padding: 32px;
         border-radius: 10px;
-        width: 360px;
+        width: min(360px, 100%);
         box-shadow: 0 4px 12px rgba(0,0,0,0.2);
     }
     .auth-box h1 {
@@ -137,6 +147,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         color: #1e5631;
     }
 </style>
+<link rel="stylesheet" href="css/registration-avatar.css?v=<?= filemtime(__DIR__ . '/css/registration-avatar.css') ?>">
 </head>
 <body class="auth-page">
 
@@ -154,8 +165,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="auth-error"><?= htmlspecialchars($error) ?></div>
         <?php endif; ?>
 
-        <form method="POST" action="register.php">
+        <form method="POST" action="register.php" enctype="multipart/form-data">
 <?= csrfField() ?>
+<?php require __DIR__ . '/../src/registration-avatar-field.php'; ?>
             <label for="fullname">ชื่อ-นามสกุล</label>
             <input type="text" id="fullname" name="fullname"
                 value="<?= htmlspecialchars($_POST['fullname'] ?? '') ?>" required>
@@ -194,5 +206,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 </script>
 
+<script src="js/registration-avatar.js?v=<?= filemtime(__DIR__ . '/js/registration-avatar.js') ?>"></script>
 </body>
 </html>

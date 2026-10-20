@@ -5,6 +5,7 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../src/User.php';
+require_once __DIR__ . '/../src/RegistrationAvatar.php';
 
 if (isset($_SESSION['user_id'])) {
     header('Location: dashboard.php');
@@ -75,11 +76,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form_type'] ?? '') === 're
         $registerError = 'รหัสผ่านและยืนยันรหัสผ่านไม่ตรงกัน';
     } else {
         $userModel = new User($pdo);
-        $ok = $userModel->register($username, $password, $fullname, 'student', $studentYear);
+        $ok = false;
+        try {
+            $ok = registerStudentWithAvatar($userModel, $pdo, $username, $password, $fullname, $studentYear, $_FILES['avatar'] ?? null);
+        } catch (InvalidArgumentException $e) {
+            $registerError = $e->getMessage();
+        } catch (Throwable $e) {
+            error_log('Registration with avatar failed');
+            $registerError = 'สมัครสมาชิกไม่สำเร็จ กรุณาลองใหม่';
+        }
         if ($ok) {
             $registerSuccess = true;
         } else {
-            $registerError = 'รหัสนักศึกษานี้ถูกใช้งานแล้ว';
+            if ($registerError === '') $registerError = 'รหัสนักศึกษานี้ถูกใช้งานแล้ว';
         }
     }
 }
@@ -282,6 +291,7 @@ justify-content: center; gap: 6px;
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
+<link rel="stylesheet" href="css/registration-avatar.css?v=<?= filemtime(__DIR__ . '/css/registration-avatar.css') ?>">
 </head>
 <body>
 
@@ -371,9 +381,10 @@ justify-content: center; gap: 6px;
         <?php if ($registerSuccess): ?>
         <div class="alert alert-success">✓ สมัครสมาชิกสำเร็จแล้ว! เข้าสู่ระบบได้เลย</div>
         <?php endif; ?>
-        <form method="POST">
+        <form method="POST" enctype="multipart/form-data">
 <?= csrfField() ?>
         <input type="hidden" name="form_type" value="register">
+        <?php require __DIR__ . '/../src/registration-avatar-field.php'; ?>
         <div class="field">
             <label for="reg_name">ชื่อ-นามสกุล</label>
             <input type="text" id="reg_name" name="fullname" required
@@ -446,5 +457,6 @@ switchTab('register', document.querySelectorAll('.tab-btn')[1])
 <?php endif; ?>
 </script>
 
+<script src="js/registration-avatar.js?v=<?= filemtime(__DIR__ . '/js/registration-avatar.js') ?>"></script>
 </body>
 </html>

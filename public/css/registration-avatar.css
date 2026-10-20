@@ -1,0 +1,10 @@
+.registration-avatar { margin: 0 0 22px; font: inherit; }
+.registration-avatar label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 10px; }
+.registration-avatar label span { font-weight: 400; }
+.registration-avatar-row { display: flex; align-items: center; gap: 14px; }
+.registration-avatar-row img { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; flex: 0 0 72px; background: #ccc; }
+.registration-avatar-row > div { min-width: 0; flex: 1; }
+.registration-avatar input[type=file] { display: block; width: 100%; max-width: 100%; font: inherit; font-size: 12px; padding: 8px 0; border: 0; background: transparent; color: inherit; }
+.registration-avatar input::file-selector-button, .registration-avatar button { border: 1px solid #739480; border-radius: 6px; padding: 7px 10px; background: #edf6ef; color: #1e5631; font: inherit; font-size: 12px; cursor: pointer; }
+.registration-avatar p { font-size: 12px; line-height: 1.6; margin-top: 8px; }
+#registration-avatar-error { color: #e77777; }
