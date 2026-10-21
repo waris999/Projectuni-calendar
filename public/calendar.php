@@ -492,7 +492,7 @@ $avatarSrc = !empty($_SESSION['profile_image'])
                 </div>
             </div>
             <div class="modal-actions">
-                <button class="btn-primary-modal" onclick="submitCreateEvent()">สร้างกิจกรรม</button>
+                <button class="btn-primary-modal" id="createEventBtn" onclick="submitCreateEvent()">สร้างกิจกรรม</button>
                 <div class="status-msg" id="createStatusMsg"></div>
             </div>
         </div>
@@ -717,7 +717,17 @@ function closeModal(id) {
 }
 
 <?php if ($isAdmin): ?>
+let createEventPending = false;
+let deleteEventPending = false;
+let createRequestId = '';
+let createRequestPayload = '';
 function openCreateModal() {
+    if (createEventPending) return;
+    createRequestId = '';
+    createRequestPayload = '';
+    const button = document.getElementById('createEventBtn');
+    button.disabled = false;
+    button.textContent = 'สร้างกิจกรรม';
     // reset ฟอร์ม
     ['createTitle','createDescription','createLocation','createMaxParticipants',
      'createActivityHours','createCheckinCode','createStart','createEnd'].forEach(id => {
@@ -729,6 +739,7 @@ function openCreateModal() {
 }
 
 async function submitCreateEvent() {
+    if (createEventPending) return;
     const title       = document.getElementById('createTitle').value.trim();
     const description = document.getElementById('createDescription').value.trim();
     const location    = document.getElementById('createLocation').value.trim();
@@ -746,35 +757,90 @@ async function submitCreateEvent() {
         return;
     }
 
+    if (new Date(end) <= new Date(start)) {
+        msgEl.textContent = 'เวลาสิ้นสุดต้องอยู่หลังเวลาเริ่มกิจกรรม';
+        msgEl.style.color = '#b71c1c';
+        return;
+    }
+    const payload = {
+        action: 'create', title, description, location,
+        max_participants: maxP, activity_hours: hours,
+        checkin_code: checkinCode, target_years: targetYears,
+        start_datetime: start.replace('T', ' ') + ':00',
+        end_datetime: end.replace('T', ' ') + ':00'
+    };
+    const signature = JSON.stringify(payload);
+    if (signature !== createRequestPayload || !createRequestId) {
+        createRequestPayload = signature;
+        createRequestId = Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join('');
+    }
+    payload.request_id = createRequestId;
+    const button = document.getElementById('createEventBtn');
+    createEventPending = true;
+    button.disabled = true;
+    button.textContent = 'กำลังบันทึก...';
     msgEl.textContent = 'กำลังบันทึก...';
     msgEl.style.color = '#666';
-
-    const res = await fetch('api/manage_event.php', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': <?= json_encode($_SESSION['csrf_token']) ?> },
-        body: JSON.stringify({
-            action:           'create',
-            title:            title,
-            description:      description,
-            location:         location,
-            max_participants: maxP,
-            activity_hours:  hours,
-            checkin_code:    checkinCode,
-            target_years:    targetYears,
-            start_datetime:  start.replace('T', ' ') + ':00',
-            end_datetime:    end.replace('T', ' ') + ':00',
-        })
-    });
-    const result = await res.json();
-
-    if (result.success) {
+    try {
+        const res = await fetch('api/manage_event.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': <?= json_encode($_SESSION['csrf_token']) ?> },
+            body: JSON.stringify(payload)
+        });
+        const result = await res.json();
+        if (!res.ok || !result.success) {
+            const messages = {
+                csrf_failed: 'คำขอหมดอายุ กรุณารีเฟรชหน้าแล้วลองใหม่',
+                invalid_fields: 'กรุณาตรวจสอบข้อมูลกิจกรรมและวันเวลา',
+                forbidden: 'กรุณาเข้าสู่ระบบด้วยบัญชีผู้ดูแลระบบอีกครั้ง'
+            };
+            throw new Error(messages[result.error] || 'สร้างกิจกรรมไม่สำเร็จ กรุณาลองใหม่');
+        }
         msgEl.textContent = 'สร้างกิจกรรมสำเร็จ!';
         msgEl.style.color = '#1e5631';
         calendar.refetchEvents();
-        setTimeout(() => closeModal('createModal'), 900);
-    } else {
-        msgEl.textContent = 'เกิดข้อผิดพลาด กรุณาลองใหม่';
+        closeModal('createModal');
+    } catch (error) {
+        msgEl.textContent = error instanceof TypeError ? 'เชื่อมต่อไม่สำเร็จ กดสร้างอีกครั้งเพื่อลองใหม่ได้' : error.message;
         msgEl.style.color = '#b71c1c';
+    } finally {
+        createEventPending = false;
+        button.disabled = false;
+        button.textContent = 'สร้างกิจกรรม';
+    }
+}
+
+async function deleteEvent(eventId) {
+    if (deleteEventPending) return;
+    if (!confirm('ยืนยันลบกิจกรรมนี้? รายการลงทะเบียนและชั่วโมงของกิจกรรมนี้จะถูกนำออกด้วย')) return;
+    const button = document.getElementById('deleteBtn');
+    const originalText = button.textContent;
+    deleteEventPending = true;
+    button.disabled = true;
+    button.textContent = 'กำลังลบ...';
+    try {
+        const res = await fetch('api/manage_event.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': <?= json_encode($_SESSION['csrf_token']) ?> },
+            body: JSON.stringify({ action: 'delete', event_id: eventId })
+        });
+        const result = await res.json();
+        if (!res.ok || !result.success) {
+            const messages = {
+                csrf_failed: 'คำขอหมดอายุ กรุณารีเฟรชหน้าแล้วลองใหม่',
+                forbidden: 'กรุณาเข้าสู่ระบบด้วยบัญชีผู้ดูแลระบบอีกครั้ง',
+                not_found: 'ไม่พบกิจกรรมนี้ กรุณารีเฟรชปฏิทิน'
+            };
+            throw new Error(messages[result.error] || 'ลบกิจกรรมไม่สำเร็จ กรุณาลองใหม่');
+        }
+        closeModal('eventModal');
+        calendar.refetchEvents();
+    } catch (error) {
+        alert(error instanceof TypeError ? 'เชื่อมต่อไม่สำเร็จ กรุณาลองใหม่' : error.message);
+    } finally {
+        deleteEventPending = false;
+        button.disabled = false;
+        button.textContent = originalText;
     }
 }
 

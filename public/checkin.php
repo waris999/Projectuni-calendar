@@ -148,6 +148,16 @@ $avatarSrc = !empty($_SESSION['profile_image'])
         cursor: pointer;
     }
     .checkin-msg { font-size: 12px; margin-top: 6px; }
+    .checkin-form button, .checkin-form input { min-height: 42px; font-family: inherit; }
+    .checkin-form .checkin-scan-button { background: #edf6ef; color: #1e5631; border: 1px solid #b9d5c2; }
+    .checkin-form button:focus-visible { outline: 3px solid #85b597; outline-offset: 2px; }
+    .checkin-form button:disabled { opacity: .65; cursor: default; }
+    .checkin-scanner-box { width: 100%; max-width: 340px; margin-top: 12px; border: 1px solid #d4e3d9; border-radius: 8px; overflow: hidden; }
+    @media (max-width: 600px) {
+        .checkin-top > div { width: 100%; min-width: 0; }
+        .checkin-form input { flex: 1; min-width: 0; width: 100px; }
+        .checkin-form button { padding: 8px 10px; }
+    }
 
     /* อัปโหลดรูปหลักฐาน */
     .evidence-section {
@@ -262,13 +272,9 @@ $avatarSrc = !empty($_SESSION['profile_image'])
         <div class="card">
             <h2>ยืนยันการเข้าร่วมกิจกรรม</h2>
             <p style="font-size:13px; color:#666; margin-bottom:14px;">
-                กรอกรหัสเช็คอินที่ได้รับหน้างาน แล้วอัปโหลดรูปหลักฐานประกอบได้เลย
+                กรอกรหัสแล้วกดยืนยัน หรือกดสแกน QR Code ข้างกิจกรรมที่ต้องการเช็คอิน เมื่อเช็คอินสำเร็จจึงอัปโหลดรูปหลักฐานได้
             </p>
-            <button class="btn-outline" id="openScannerBtn"
-                    style="width:200px; margin-bottom:16px;">
-                📷 สแกน QR Code
-            </button>
-            <div id="qrScannerBox" style="display:none; max-width:320px; margin-bottom:16px;"></div>
+
 
             <?php if (empty($myEvents)): ?>
                 <p style="color:#999; font-size:14px;">คุณยังไม่ได้ลงทะเบียนกิจกรรมใดๆ</p>
@@ -315,11 +321,15 @@ $avatarSrc = !empty($_SESSION['profile_image'])
                                             placeholder="กรอกรหัส"
                                             class="checkin-code-input"
                                             maxlength="10">
-                                        <button onclick="submitCheckin(<?= $ev['id'] ?>, this)">
+                                        <button type="button" class="checkin-confirm" onclick="submitCheckin(<?= $ev['id'] ?>, this)">
                                             ยืนยัน
                                         </button>
+                                        <button type="button" class="checkin-scan-button" data-event-id="<?= (int)$ev['id'] ?>" aria-controls="qrScannerBox-<?= (int)$ev['id'] ?>" aria-expanded="false">
+                                            📷 สแกน QR Code
+                                        </button>
                                     </div>
-                                    <div class="checkin-msg"></div>
+                                    <div class="checkin-msg" role="status"></div>
+                                    <div id="qrScannerBox-<?= (int)$ev['id'] ?>" class="checkin-scanner-box" hidden></div>
                                 </div>
                             <?php endif; ?>
                         </div>

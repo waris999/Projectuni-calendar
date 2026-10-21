@@ -57,6 +57,25 @@ if ($action === 'get') {
 
 // ---- CREATE ----
 if ($action === 'create') {
+    $requestId = $data['request_id'] ?? '';
+    if (!is_string($requestId) || ($requestId !== '' && !preg_match('/^[a-f0-9]{32}$/D', $requestId))) {
+        http_response_code(400); exit(json_encode(['error' => 'invalid_request_id']));
+    }
+    $requestData = $data;
+    unset($requestData['request_id']);
+    $requestHash = hash('sha256', json_encode($requestData));
+    $cacheKey = (string)$_SESSION['user_id'] . ':' . $requestId;
+    $previous = $_SESSION['created_event_requests'][$cacheKey] ?? null;
+    // PHP keeps the session locked, so concurrent retries are serialized.
+    if ($requestId !== '' && $previous) {
+        if (!hash_equals($previous['hash'], $requestHash)) {
+            http_response_code(409); exit(json_encode(['error' => 'request_conflict']));
+        }
+        if (!$eventModel->findById($previous['id'])) {
+            http_response_code(409); exit(json_encode(['error' => 'event_removed']));
+        }
+        exit(json_encode(['success' => true, 'event_id' => $previous['id']]));
+    }
     $title = trim($data['title'] ?? '');
     $start = trim($data['start_datetime'] ?? '');
     $end   = trim($data['end_datetime'] ?? '');
@@ -83,6 +102,8 @@ if ($action === 'create') {
     $activityHours = isset($data['activity_hours']) && $data['activity_hours'] !== ''
         ? (float)$data['activity_hours'] : 0;
 
+    $pdo->beginTransaction();
+    try {
     $ok = $eventModel->create([
         'title'            => $title,
         'description'      => trim($data['description'] ?? ''),
@@ -96,11 +117,19 @@ if ($action === 'create') {
         'created_by'       => $_SESSION['user_id'],
     ]);
 
-    if ($ok) {
-        $notifModel->notifyStudents($targetYears, "มีกิจกรรมใหม่: {$title}", 'calendar.php');
+    $eventId = (int)$pdo->lastInsertId();
+    if (!$ok) throw new RuntimeException('Event create failed');
+    $notifModel->notifyStudents($targetYears, "มีกิจกรรมใหม่: {$title}", 'calendar.php');
+    $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        throw $e;
     }
-
-    echo json_encode(['success' => $ok]);
+    if ($requestId !== '') {
+        $_SESSION['created_event_requests'][$cacheKey] = ['hash' => $requestHash, 'id' => $eventId];
+        if (count($_SESSION['created_event_requests']) > 30) array_shift($_SESSION['created_event_requests']);
+    }
+    echo json_encode(['success' => true, 'event_id' => $eventId]);
     exit;
 }
 
@@ -162,17 +191,26 @@ if ($action === 'delete') {
         exit;
     }
 
-    $event = $eventModel->findById($eventId);
-    if ($event) {
-        $notifModel->notifyRegisteredUsers(
-            $eventId,
-            "กิจกรรม \"{$event['title']}\" ถูกยกเลิก",
-            'dashboard.php'
-        );
+    $pdo->beginTransaction();
+    try {
+        // Lock the event before notifying and deleting so both actions commit together.
+        $stmt = $pdo->prepare('SELECT * FROM events WHERE id = :id FOR UPDATE');
+        $stmt->execute(['id' => $eventId]);
+        $event = $stmt->fetch();
+        if (!$event) {
+            $pdo->rollBack();
+            http_response_code(404);
+            exit(json_encode(['error' => 'not_found']));
+        }
+        $notifModel->notifyRegisteredUsers($eventId, "กิจกรรม \"{$event['title']}\" ถูกยกเลิก", 'dashboard.php');
+        $ok = $eventModel->delete($eventId);
+        if (!$ok) throw new RuntimeException('Event delete failed');
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        throw $e;
     }
-
-    $ok = $eventModel->delete($eventId);
-    echo json_encode(['success' => $ok]);
+    echo json_encode(['success' => true]);
     exit;
 }
 
