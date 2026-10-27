@@ -6,6 +6,7 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../src/User.php';
 require_once __DIR__ . '/../src/RegistrationAvatar.php';
+require_once __DIR__ . '/../src/RegistrationAvatar_Encoded.php';
 
 if (isset($_SESSION['user_id'])) {
     header('Location: dashboard.php');
@@ -81,11 +82,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form_type'] ?? '') === 're
         $userModel = new User($pdo);
         $ok = false;
         try {
-            $ok = registerStudentWithAvatar($userModel, $pdo, $username, $password, $nameTitle . $fullname, $studentYear, $_FILES['avatar'] ?? null);
+            $ok = registerStudentWithEncodedAvatar($userModel, $pdo, $username, $password, $nameTitle . $fullname, $studentYear, avatarDataFromPost());
         } catch (InvalidArgumentException $e) {
             $registerError = $e->getMessage();
         } catch (Throwable $e) {
-            error_log('Registration with avatar failed');
+            error_log('Registration failed: ' . get_class($e));
             $registerError = 'สมัครสมาชิกไม่สำเร็จ กรุณาลองใหม่';
         }
         if ($ok) {
@@ -384,7 +385,7 @@ justify-content: center; gap: 6px;
         <?php if ($registerSuccess): ?>
         <div class="alert alert-success">✓ สมัครสมาชิกสำเร็จแล้ว! เข้าสู่ระบบได้เลย</div>
         <?php endif; ?>
-        <form method="POST" enctype="multipart/form-data">
+        <form method="POST" action="index.php" enctype="application/x-www-form-urlencoded">
 <?= csrfField() ?>
         <input type="hidden" name="form_type" value="register">
         <?php require __DIR__ . '/../src/registration-avatar-field.php'; ?>

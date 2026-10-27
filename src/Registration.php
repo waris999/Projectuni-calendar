@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/AttendanceReview.php';
 
 class Registration
 {
@@ -73,8 +74,7 @@ class Registration
             if ($event['start_datetime'] > $now) return 'not_started';
             if ($event['end_datetime'] <= $now) return 'event_ended';
             if (empty($event['checkin_code']) || !hash_equals(strtoupper($event['checkin_code']), strtoupper(trim($code)))) return 'wrong_code';
-            $this->pdo->prepare("UPDATE registrations SET status = 'attended' WHERE id = ? AND status = 'registered'")->execute([$reg['id']]);
-            return 'success';
+            return (new AttendanceReview($this->pdo))->verifyLocked((int)$reg['id']);
         });
     }
 }

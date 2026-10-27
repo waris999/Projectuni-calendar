@@ -8,6 +8,7 @@ if (!isset($_SESSION['user_id'])) {
 
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../src/User.php';
+require_once __DIR__ . '/../src/Avatar.php';
 require_once __DIR__ . '/../src/Notification.php';
 
 $userModel  = new User($pdo);
@@ -24,34 +25,14 @@ $pwSuccess   = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
-    // ===== อัปโหลดรูปโปรไฟล์ =====
-    if (isset($_FILES['avatar']) && $_FILES['avatar']['error'] === UPLOAD_ERR_OK) {
-        $allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
-        $fileType     = mime_content_type($_FILES['avatar']['tmp_name']);
-
-        if (!in_array($fileType, $allowedTypes, true)) {
-            $error = 'รองรับเฉพาะไฟล์ JPG, PNG, WEBP เท่านั้น';
-        } elseif ($_FILES['avatar']['size'] > 2 * 1024 * 1024) {
-            $error = 'ขนาดไฟล์ต้องไม่เกิน 2MB';
-        } else {
-            try { $ext = imageExtension($_FILES['avatar']['tmp_name']); } catch (InvalidArgumentException $e) { $error = 'ไฟล์รูปไม่ถูกต้อง'; }
-            if (!isset($ext)) { $ext = null; }
-            $newFilename = 'user_' . $_SESSION['user_id'] . '_' . bin2hex(random_bytes(16)) . '.' . $ext;
-            $destination = __DIR__ . '/img/avatars/' . $newFilename;
-
-            if ($ext !== null && move_uploaded_file($_FILES['avatar']['tmp_name'], $destination)) {
-                if (!empty($user['profile_image'])) {
-                    $oldPath = __DIR__ . '/img/avatars/' . $user['profile_image'];
-                    if (file_exists($oldPath)) unlink($oldPath);
-                }
-                $userModel->updateAvatar($_SESSION['user_id'], $newFilename);
-                $_SESSION['profile_image'] = $newFilename;
-                $success = 'อัปเดตรูปโปรไฟล์สำเร็จ';
-                $user    = $userModel->findById($_SESSION['user_id']);
-            } else {
-                $error = 'อัปโหลดรูปไม่สำเร็จ กรุณาลองใหม่';
-            }
-        }
+    // Use an ordinary POST for avatar changes as well as signup.
+    if (isset($_POST['save_avatar'])) {
+        try {
+            updateEncodedAvatar($pdo, (int)$_SESSION['user_id'], avatarDataFromPost());
+            $user = $userModel->findById($_SESSION['user_id']);
+            $success = 'อัปเดตรูปโปรไฟล์สำเร็จ';
+        } catch (InvalidArgumentException $e) { $error = $e->getMessage(); }
+        catch (Throwable $e) { error_log('Avatar update failed: ' . get_class($e)); $error = 'บันทึกรูปไม่สำเร็จ กรุณาลองใหม่'; }
     }
 
     // ===== บันทึกข้อมูลส่วนตัว =====
@@ -99,9 +80,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$avatarSrc = !empty($user['profile_image'])
-    ? 'img/avatars/' . htmlspecialchars($user['profile_image'])
-    : 'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22256%22%20height%3D%22256%22%20viewBox%3D%220%200%20256%20256%22%3E%3Cdefs%3E%3CclipPath%20id%3D%22circle%22%3E%3Ccircle%20cx%3D%22128%22%20cy%3D%22128%22%20r%3D%22128%22%2F%3E%3C%2FclipPath%3E%3C%2Fdefs%3E%3Cg%20clip-path%3D%22url%28%23circle%29%22%3E%3Ccircle%20cx%3D%22128%22%20cy%3D%22128%22%20r%3D%22128%22%20fill%3D%22%23ccc%22%2F%3E%3Ccircle%20cx%3D%22128%22%20cy%3D%2296%22%20r%3D%2248%22%20fill%3D%22%23999%22%2F%3E%3Cpath%20d%3D%22M32%20256v-24c0-42%2043-80%2096-80s96%2038%2096%2080v24z%22%20fill%3D%22%23999%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E';
+// Resolve either a filename or a legacy relative path stored in profile_image.
+// The file must exist inside public/img/avatars; otherwise use the default avatar.
+$defaultAvatar = 'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22256%22%20height%3D%22256%22%20viewBox%3D%220%200%20256%20256%22%3E%3Ccircle%20cx%3D%22128%22%20cy%3D%22128%22%20r%3D%22128%22%20fill%3D%22%23ddd%22%2F%3E%3Ccircle%20cx%3D%22128%22%20cy%3D%2296%22%20r%3D%2248%22%20fill%3D%22%23999%22%2F%3E%3Cpath%20d%3D%22M32%20256v-24c0-42%2043-80%2096-80s96%2038%2096%2080v24z%22%20fill%3D%22%23999%22%2F%3E%3C%2Fsvg%3E';
+$avatarSrc = $defaultAvatar;
+$storedAvatar = trim((string)($user['profile_image'] ?? ''));
+if ($storedAvatar !== '') {
+    $avatarFilename = basename(str_replace('\\', '/', $storedAvatar));
+    // Only allow expected image filenames; never use a database value as an arbitrary URL.
+    if (preg_match('/\A[a-zA-Z0-9_-]+\.(?:jpg|jpeg|png|webp)\z/i', $avatarFilename)) {
+        $avatarFile = __DIR__ . '/img/avatars/' . $avatarFilename;
+        if (is_file($avatarFile)) {
+            $avatarSrc = 'img/avatars/' . rawurlencode($avatarFilename);
+        }
+    }
+}
+
+require_once __DIR__ . '/../src/Avatar.php';
+$avatarSrc = currentAvatarUrl($pdo, (int)$_SESSION['user_id']);
 ?>
 <!DOCTYPE html>
 <html lang="th">
@@ -111,6 +107,7 @@ $avatarSrc = !empty($user['profile_image'])
 <title>ข้อมูลส่วนตัว | Uni Calendar</title>
 <link rel="stylesheet" href="css/style.css?v=<?= filemtime(__DIR__ . '/css/style.css') ?>">
 <style>
+    #registration-avatar-clear[hidden] { display: none !important; }
     .profile-card { max-width: 480px; }
     .avatar-upload-wrap { text-align: center; margin-bottom: 8px; }
     .avatar-upload-wrap img {
@@ -151,7 +148,7 @@ $avatarSrc = !empty($user['profile_image'])
 <aside class="sidebar">
     <div class="profile">
         <a href="profile.php">
-            <img src="<?= $avatarSrc ?>" alt="รูปโปรไฟล์" width="70" height="70" onerror="this.onerror=null;this.src='data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22256%22%20height%3D%22256%22%20viewBox%3D%220%200%20256%20256%22%3E%3Cdefs%3E%3CclipPath%20id%3D%22circle%22%3E%3Ccircle%20cx%3D%22128%22%20cy%3D%22128%22%20r%3D%22128%22%2F%3E%3C%2FclipPath%3E%3C%2Fdefs%3E%3Cg%20clip-path%3D%22url%28%23circle%29%22%3E%3Ccircle%20cx%3D%22128%22%20cy%3D%22128%22%20r%3D%22128%22%20fill%3D%22%23ccc%22%2F%3E%3Ccircle%20cx%3D%22128%22%20cy%3D%2296%22%20r%3D%2248%22%20fill%3D%22%23999%22%2F%3E%3Cpath%20d%3D%22M32%20256v-24c0-42%2043-80%2096-80s96%2038%2096%2080v24z%22%20fill%3D%22%23999%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E';">
+            <img src="<?= htmlspecialchars($avatarSrc, ENT_QUOTES, 'UTF-8') ?>" alt="รูปโปรไฟล์" width="70" height="70" onerror="this.onerror=null;this.src='data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22256%22%20height%3D%22256%22%20viewBox%3D%220%200%20256%20256%22%3E%3Cdefs%3E%3CclipPath%20id%3D%22circle%22%3E%3Ccircle%20cx%3D%22128%22%20cy%3D%22128%22%20r%3D%22128%22%2F%3E%3C%2FclipPath%3E%3C%2Fdefs%3E%3Cg%20clip-path%3D%22url%28%23circle%29%22%3E%3Ccircle%20cx%3D%22128%22%20cy%3D%22128%22%20r%3D%22128%22%20fill%3D%22%23ccc%22%2F%3E%3Ccircle%20cx%3D%22128%22%20cy%3D%2296%22%20r%3D%2248%22%20fill%3D%22%23999%22%2F%3E%3Cpath%20d%3D%22M32%20256v-24c0-42%2043-80%2096-80s96%2038%2096%2080v24z%22%20fill%3D%22%23999%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E';">
         </a>
         <div class="name"><?= htmlspecialchars($user['fullname']) ?></div>
         <div class="role">
@@ -169,6 +166,7 @@ $avatarSrc = !empty($user['profile_image'])
         <?php if ($isAdmin): ?>
             <a href="admin_dashboard.php">📊 แดชบอร์ด</a>
             <a href="admin_hours.php">⏱️ ชั่วโมงกิจกรรม</a>
+            <a href="admin_attendance.php">📝 อนุมัติชั่วโมง</a>
             <a href="admin_users.php">👥 จัดการผู้ใช้</a>
         <?php else: ?>
             <a href="checkin.php">✅ เช็คอินกิจกรรม</a>
@@ -200,17 +198,23 @@ $avatarSrc = !empty($user['profile_image'])
         <!-- รูปโปรไฟล์ -->
         <div class="card profile-card">
             <h2>รูปโปรไฟล์</h2>
-            <form method="POST" enctype="multipart/form-data">
+            <form method="POST" enctype="application/x-www-form-urlencoded">
 <?= csrfField() ?>
                 <div class="avatar-upload-wrap">
-                    <img src="<?= $avatarSrc ?>" alt="avatar" id="avatarPreview">
+                    <img src="<?= htmlspecialchars($avatarSrc, ENT_QUOTES, 'UTF-8') ?>" alt="avatar" id="avatarPreview" onerror="this.onerror=null;this.src=<?= htmlspecialchars(json_encode($defaultAvatar), ENT_QUOTES, 'UTF-8') ?>">
                     <br>
                     <label class="upload-btn" for="avatarInput">เปลี่ยนรูป</label>
-                    <input type="file" name="avatar" id="avatarInput"
+                    <input type="file" id="avatarInput"
                            accept="image/jpeg,image/png,image/webp"
-                           onchange="this.form.submit()">
+>
                 </div>
                 <div class="avatar-hint">รองรับ JPG, PNG, WEBP ขนาดไม่เกิน 2MB</div>
+                <input type="hidden" name="avatar_data" value="">
+                <input type="hidden" name="avatar_selected" value="0">
+                <input type="hidden" name="save_avatar" value="1">
+                <p id="registration-avatar-error" role="status" style="color:#b71c1c;font-size:13px;margin:10px 0;"></p>
+                <button type="button" id="registration-avatar-clear" class="btn" hidden>ยกเลิกรูปที่เลือก</button>
+                <button type="submit" class="btn" style="margin-top:12px;">บันทึกรูปโปรไฟล์</button>
             </form>
         </div>
 
@@ -281,5 +285,6 @@ $avatarSrc = !empty($user['profile_image'])
 </div>
 
 <script src="js/mobile-layout.js?v=<?= filemtime(__DIR__ . '/js/mobile-layout.js') ?>"></script>
+<script src="js/registration-avatar.js?v=<?= filemtime(__DIR__ . '/js/registration-avatar.js') ?>"></script>
 </body>
 </html>

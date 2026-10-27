@@ -30,7 +30,7 @@ if ($attempts['until'] <= time()) $attempts = ['count'=>0, 'until'=>time()+900];
 if ($attempts['count'] >= 10) { http_response_code(429); exit(json_encode(['result'=>'rate_limited'])); }
 try { $result = $regModel->checkin($_SESSION['user_id'], $eventId, $code); } catch (Throwable $e) { http_response_code(500); exit(json_encode(['result'=>'server_error'])); }
 if ($result === 'wrong_code') $attempts['count']++;
-if ($result === 'success') $attempts['count'] = 0;
+if (in_array($result, ['awaiting_evidence','pending_approval'], true)) $attempts['count'] = 0;
 $_SESSION['checkin_attempts'][$eventId] = $attempts;
 
 echo json_encode(['result' => $result]);

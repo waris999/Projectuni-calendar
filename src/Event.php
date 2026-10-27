@@ -88,9 +88,12 @@ class Event
     public function getRegisteredByUserForCheckin(int $userId): array
     {
         $stmt = $this->pdo->prepare(
-            "SELECT e.id, e.title, e.location, e.start_datetime, e.end_datetime, r.status
+            "SELECT e.id, e.title, e.location, e.start_datetime, e.end_datetime, r.status,
+                   r.id AS registration_id, a.id AS review_id, a.status AS review_status,
+                   a.review_note, a.evidence_filename, a.submitted_at
             FROM events e
             INNER JOIN registrations r ON r.event_id = e.id
+            LEFT JOIN attendance_reviews a ON a.registration_id = r.id
             WHERE r.user_id = :user_id AND r.status IN ('registered', 'attended')
             ORDER BY e.start_datetime DESC"
         );
@@ -101,9 +104,10 @@ class Event
     public function getHistoryForUser(int $userId): array
     {
         $stmt = $this->pdo->prepare(
-            "SELECT e.*, r.status AS reg_status
+            "SELECT e.*, r.status AS reg_status, a.status AS review_status, a.review_note
             FROM events e
             INNER JOIN registrations r ON r.event_id = e.id
+            LEFT JOIN attendance_reviews a ON a.registration_id = r.id
             WHERE r.user_id = :user_id
             ORDER BY e.start_datetime DESC"
         );

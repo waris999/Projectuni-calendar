@@ -1,0 +1,29 @@
+.attendance-intro { color:#607267; line-height:1.7; margin-bottom:18px; font-size:14px; }
+.attendance-row { padding:20px 0; border-bottom:1px solid #e6eee8; }
+.attendance-row:last-child { border-bottom:0; }
+.attendance-row-head { display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap; align-items:flex-start; }
+.attendance-row h3 { color:#1e5631; margin:0 0 6px; font-size:16px; }
+.attendance-meta { color:#66736b; font-size:13px; line-height:1.7; }
+.attendance-state { display:inline-block; padding:6px 12px; border-radius:20px; background:#fff3d6; color:#805d17; font-size:13px; }
+.attendance-state.approved { background:#e6f4ea; color:#1e5631; }
+.attendance-state.rejected { background:#fdecea; color:#9a3030; }
+.attendance-state.muted { background:#eef1ef; color:#647169; }
+.attendance-evidence-form,.attendance-proof { margin-top:14px; padding:16px; background:#f6faf7; border:1px solid #dce9df; border-radius:8px; }
+.attendance-evidence-form label { display:block; margin:0 0 8px; color:#1e5631; font-size:14px; }
+.attendance-evidence-form input,.attendance-evidence-form textarea { width:100%; max-width:100%; padding:10px; margin-bottom:10px; border:1px solid #cad8ce; border-radius:6px; background:#fff; font:inherit; font-size:14px; }
+.attendance-evidence-form textarea { resize:vertical; min-height:70px; }
+.evidence-preview,.attendance-proof img { display:block; max-width:100%; max-height:260px; margin:12px 0; border-radius:6px; object-fit:contain; }
+.evidence-preview[hidden] { display:none; }
+.evidence-error,.attendance-error { color:#9a3030; font-size:13px; line-height:1.7; }
+.attendance-success { background:#e6f4ea; color:#1e5631; padding:12px 16px; border-radius:8px; margin-bottom:16px; }
+.attendance-note { margin-top:10px; font-size:14px; line-height:1.7; color:#506459; }
+.review-filters { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:18px; }
+.review-filters input,.review-filters select,.review-decision textarea { padding:10px; border:1px solid #cad8ce; border-radius:6px; font:inherit; font-size:14px; }
+.review-filters input { flex:1; min-width:160px; }
+.review-decision { margin-top:16px; }
+.review-decision textarea { width:100%; min-height:70px; }
+.review-actions { display:flex; gap:10px; margin-top:10px; flex-wrap:wrap; }
+.btn.btn-reject { background:#fff; color:#9a3030; border:1px solid #d8a6a6; }
+.review-filters .btn,.review-actions .btn,.attendance-evidence-form .btn { min-height:44px; font-family:inherit; }
+.review-pagination { display:flex; justify-content:space-between; gap:12px; margin:16px 0; }
+@media(max-width:600px){.attendance-row-head>div{width:100%;min-width:0}.review-filters>*{width:100%}.review-actions>.btn{flex:1}}
